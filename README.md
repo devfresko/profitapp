@@ -1,1 +1,1 @@
-# profitapp
+# profitApp
