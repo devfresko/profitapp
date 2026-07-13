@@ -251,7 +251,10 @@ function enterApp() {
   const lw = document.getElementById('login-wrapper');
   const aw = document.getElementById('app-wrapper');
   if (lw) lw.style.display = 'none';
-  if (aw) aw.style.display = 'block';
+  if (aw) { aw.style.display = 'block'; }
+  // Show loader while data loads
+  const ldr = document.getElementById('loader');
+  if (ldr) ldr.style.display = 'flex';
   _initApp();
 }
 
@@ -308,7 +311,7 @@ function _loadData(firstLoad, cb) {
       if (firstLoad) {
         UI.pollerTimer = setInterval(_silentPoll, 30000);
       }
-      // Hide loader on first data load
+      DB._loaded = true;
       const ldr = document.getElementById('loader'); if(ldr) ldr.style.display = 'none';
       if (cb) cb();
       else _rerender();
@@ -369,11 +372,11 @@ function goTo(v, rerender) {
 
   // update active view
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-  const vel = document.getElementById('v-' + v); if (vel) vel.classList.add('on');
+  const vel = document.getElementById('v-' + v); if (vel) vel.classList.add('active');
 
   // update nav highlight
   document.querySelectorAll('.sb-nav-item').forEach(el => el.classList.remove('active'));
-  const nel = document.getElementById('nav-' + v); if (nel) nel.classList.add('on');
+  const nel = document.getElementById('nav-' + v); if (nel) nel.classList.add('active');
 
   // update topbar
   const meta = VIEW_META[v] || {};
@@ -392,7 +395,7 @@ function goTo(v, rerender) {
   UI.view = v;
 
   // render view
-  if (!rerender && !DB.stats) return; // data not loaded yet
+  if (!rerender && !DB._loaded) return; // data not loaded yet
   if (v === 'dashboard')  renderDashboard();
   else if (v === 'summary')  renderSummary();
   else if (v === 'purchase') renderPurchase();
@@ -1318,7 +1321,7 @@ function openModal(id) {
     document.getElementById('exp-amt').value  = '';
     _populateMonths();
   }
-  document.getElementById(id).classList.add('active');
+  document.getElementById(id).classList.add('show');
 }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
@@ -1632,7 +1635,7 @@ function toggleDark() {
 
     /* Print styles */
     @media print {
-      #sb, #topbar, #footer-bar, .ph-r, .pager, .btn, button { display:none !important; }
+      #sb, #topbar, #footer-bar, .page-actions, .pager, .btn, button { display:none !important; }
       #app { display:block !important; height:auto !important; }
       #main { height:auto !important; overflow:visible !important; }
       #content { overflow:visible !important; height:auto !important; padding:0 !important; }
@@ -1709,3 +1712,6 @@ if ('serviceWorker' in navigator) {
       .catch(function(err) { console.log('SW registration failed:', err); });
   });
 }
+
+// Sidebar toggle alias
+function toggleSB() { toggleSidebar(); }
