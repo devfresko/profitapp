@@ -199,8 +199,8 @@ function toggleEye(btn) {
 
 function showLgErr(msg) {
   const el = document.getElementById('eb');
-  document.getElementById('eb-txt').textContent = msg;
-  el.classList.add('active');
+  document.getElementById('et').textContent = msg;
+  el.classList.add('on');
 }
 function hideLgErr() { document.getElementById('eb').classList.remove('show'); }
 
@@ -329,10 +329,10 @@ function _silentPoll() {
 }
 
 function doRefresh() {
-  const ico = document.getElementById('ref-ico');
-  if (ico) ico.classList.add('spin-ico');
+  const ico = document.getElementById('refresh-icon');
+  if (ico) ico.classList.add('spinning');
   _loadData(false, () => {
-    if (ico) ico.classList.remove('spin-ico');
+    if (ico) ico.classList.remove('spinning');
     toast('Data refreshed', 'success');
   });
 }
@@ -345,7 +345,7 @@ function _showLoadError(msg) {
     <i class="fas fa-exclamation-triangle" style="font-size:48px;color:var(--amber);margin-bottom:16px;display:block"></i>
     <div style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:8px">Data Load Failed</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:20px">${msg}</div>
-    <button class="btn btn-brand" onclick="doRefresh()"><i class="fas fa-redo"></i> Retry</button>
+    <button class="btn btn-primary" onclick="doRefresh()"><i class="fas fa-redo"></i> Retry</button>
   </div>`;
 }
 
@@ -369,11 +369,11 @@ function goTo(v, rerender) {
 
   // update active view
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-  const vel = document.getElementById('v-' + v); if (vel) vel.classList.add('active');
+  const vel = document.getElementById('v-' + v); if (vel) vel.classList.add('on');
 
   // update nav highlight
   document.querySelectorAll('.sb-nav-item').forEach(el => el.classList.remove('active'));
-  const nel = document.getElementById('n-' + v); if (nel) nel.classList.add('active');
+  const nel = document.getElementById('nav-' + v); if (nel) nel.classList.add('on');
 
   // update topbar
   const meta = VIEW_META[v] || {};
@@ -422,11 +422,11 @@ function toggleSidebar() {
   if (chev) chev.className = UI.sbCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left';
 }
 function openSidebar() {
-  document.getElementById('sb').classList.add('mobile-open');
-  document.getElementById('sb-backdrop').classList.add('active');
+  document.getElementById('sb').classList.add('mobile-show');
+  document.getElementById('sb-backdrop').classList.add('show');
 }
 function closeSidebar() {
-  document.getElementById('sb').classList.remove('mobile-open');
+  document.getElementById('sb').classList.remove('mobile-show');
   document.getElementById('sb-backdrop').classList.remove('show');
 }
 
@@ -434,22 +434,89 @@ function closeSidebar() {
    SIGN OUT
 ───────────────────────────────────────────────────────── */
 function signOutPrompt() { openModal('m-signout'); }
-function signOutPrompt_old_swal() {
-  Swal.fire({
-    title: 'Sign Out?',
-    text: 'Aap Fresko P&L Tracker se logout karna chahte hain?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Sign Out',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#C0392B',
-    reverseButtons: true
-  }).then(r => { if (r.isConfirmed) location.reload(); });
-}
 
 /* ─────────────────────────────────────────────────────────
    DASHBOARD
 ───────────────────────────────────────────────────────── */
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER HELPERS
+═══════════════════════════════════════════════════════════ */
+
+// Stat card builder
+function _statCard(label, val, sub, colorClass, icon) {
+  return `<div class="stat-card ${colorClass}">
+    <div class="stat-label"><i class="fas ${icon}" style="margin-right:6px"></i>${label}</div>
+    <div class="stat-val">${val}</div>
+    ${sub ? `<div class="stat-sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+// Card with header + body
+function _card(hd, body, extra) {
+  return `<div class="card" ${extra||''}>
+    <div class="card-p" style="border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:14px 20px">
+      <div style="font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px">${hd}</div>
+    </div>
+    <div class="card-p">${body}</div>
+  </div>`;
+}
+
+// Page header
+function _pageHd(title, sub, actions) {
+  return `<div class="page-hd">
+    <div><div class="page-title">${title}</div><div class="page-sub">${sub}</div></div>
+    <div class="page-actions">${actions||''}</div>
+  </div>`;
+}
+
+// KV row (key-value)
+function _kv(lbl, val, color) {
+  return `<div class="kv-row">
+    <span class="kv-lbl">${lbl}</span>
+    <span class="kv-val" style="color:${color||'var(--text)'}">${val}</span>
+  </div>`;
+}
+
+// Empty state
+function _empty(msg, sub) {
+  return `<div class="empty"><i class="fas fa-inbox"></i><p>${msg}</p>${sub?`<small>${sub}</small>`:''}</div>`;
+}
+
+// Table wrapper
+function _tbl(thead, tbody) {
+  return `<div class="tbl-wrap"><table class="tbl"><thead><tr>${thead}</tr></thead><tbody>${tbody||`<tr><td colspan="20">${_empty('Koi data nahi hai')}</td></tr>`}</tbody></table></div>`;
+}
+
+function _th(t) { return `<th>${t}</th>`; }
+function _td(t, cls) { return `<td${cls?' class="'+cls+'"':''}>${t}</td>`; }
+
+// Pager
+function _pager(page, total, perPage, fnName) {
+  const pages = Math.ceil(total / perPage) || 1;
+  const from  = total ? (page-1)*perPage+1 : 0;
+  const to    = Math.min(page*perPage, total);
+  return `<div class="pager">
+    <div class="pager-info">${total ? `${from}–${to} of ${total} entries` : 'No entries'}</div>
+    <div class="pager-btns">
+      <button class="pager-btn" ${page<=1?'disabled':''} onclick="${fnName}(${page-1})"><i class="fas fa-chevron-left" style="font-size:10px"></i></button>
+      <span class="pager-page">${page} / ${pages}</span>
+      <button class="pager-btn" ${page>=pages?'disabled':''} onclick="${fnName}(${page+1})"><i class="fas fa-chevron-right" style="font-size:10px"></i></button>
+    </div>
+  </div>`;
+}
+
+// btn shortcuts
+function _btnPrimary(lbl, onclick, icon) {
+  return `<button class="btn btn-primary btn-sm" onclick="${onclick}"><i class="fas ${icon}" style="margin-right:6px"></i>${lbl}</button>`;
+}
+function _btnSecondary(lbl, onclick, icon) {
+  return `<button class="btn btn-secondary btn-sm" onclick="${onclick}"><i class="fas ${icon}" style="margin-right:6px"></i>${lbl}</button>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD
+═══════════════════════════════════════════════════════════ */
 function renderDashboard() {
   const s   = DB.stats    || {};
   const pur = DB.purchases || [];
@@ -460,247 +527,181 @@ function renderDashboard() {
   const netPos   = (s.netPL   || 0) >= 0;
   const grossPos = (s.grossPL || 0) >= 0;
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Dashboard</h2><p>FY 2025–26 · Real-time Profit & Loss Overview</p></div>
-    <div class="ph-r">
-      <button class="btn btn-ghost btn-sm" onclick="goTo('monthly')"><i class="fas fa-calendar-alt"></i> Monthly Report</button>
-      <button class="btn btn-ghost btn-sm" onclick="goTo('summary')"><i class="fas fa-chart-bar"></i> Annual</button>
-    </div>
-  </div>
+  // Stat cards
+  const cards = `<div class="g4" style="margin-bottom:20px">
+    ${_statCard('Total Purchase', INR(s.totalPurchase), s.purchaseCount+' entries', 'sc-red', 'fa-shopping-cart')}
+    ${_statCard('Total Sale', INR(s.totalSale), s.saleCount+' entries', 'sc-green', 'fa-truck')}
+    ${_statCard('Total Expenses', INR(s.totalExpenses), 'FY 2025–26', 'sc-amber', 'fa-file-invoice')}
+    ${_statCard(
+      netPos ? 'Net Profit' : 'Net Loss',
+      INR(Math.abs(s.netPL||0)),
+      netPos ? '▲ Profitable' : '▼ Loss making',
+      netPos ? 'sc-green' : 'sc-red',
+      netPos ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'
+    )}
+  </div>`;
 
-  <!-- KPI CARDS -->
-  <div class="krow">
-    <div class="kcard">
-      <div class="k-ico"><i class="fas fa-shopping-cart"></i></div>
-      <div class="k-val">${INR(s.totalPurchase)}</div>
-      <div class="k-label">Total Purchase</div>
-      <div class="k-sub"><i class="fas fa-hashtag"></i> ${s.purchaseCount||0} entries</div>
-    </div>
-    <div class="kcard green">
-      <div class="k-ico"><i class="fas fa-truck"></i></div>
-      <div class="k-val">${INR(s.totalSale)}</div>
-      <div class="k-label">Total Sale</div>
-      <div class="k-sub"><i class="fas fa-hashtag"></i> ${s.saleCount||0} entries</div>
-    </div>
-    <div class="kcard amber">
-      <div class="k-ico"><i class="fas fa-file-invoice"></i></div>
-      <div class="k-val">${INR(s.totalExpenses)}</div>
-      <div class="k-label">Total Expenses</div>
-      <div class="k-sub"><i class="fas fa-calendar"></i> FY 2025–26</div>
-    </div>
-    <div class="kcard ${netPos ? 'green' : ''}" style="--kc:${netPos?'var(--green)':'var(--red)'};--kb:${netPos?'var(--green-l)':'var(--red-l)'}">
-      <div class="k-ico"><i class="fas fa-${netPos?'arrow-trend-up':'arrow-trend-down'}"></i></div>
-      <div class="k-val" style="color:${netPos?'var(--green)':'var(--red)'}">${INR(Math.abs(s.netPL||0))}</div>
-      <div class="k-label">Net P/L</div>
-      <div class="k-sub ${netPos?'pos':'neg'}">${netPos?'▲ Profit':'▼ Loss'}</div>
-    </div>
-  </div>
-
-  <!-- CHARTS + SNAPSHOT -->
-  <div class="g-6-4" style="margin-bottom:16px">
+  // Charts row
+  const charts = `<div class="g2" style="margin-bottom:20px">
     <div class="card">
-      <div class="card-hd">
-        <div class="card-title"><i class="fas fa-chart-line"></i> Purchase vs Sale Trend (Monthly)</div>
+      <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+        <span style="font-size:14px;font-weight:700;color:var(--text)"><i class="fas fa-chart-line" style="color:var(--blue);margin-right:8px"></i>Purchase vs Sale Trend</span>
       </div>
-      <div class="card-body">
-        <div class="chart-box" style="height:230px"><canvas id="ch-trend"></canvas></div>
+      <div class="card-p">
+        <div style="height:220px;position:relative"><canvas id="ch-trend"></canvas></div>
       </div>
     </div>
-    <div>
-      <!-- P/L Snapshot -->
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-hd"><div class="card-title"><i class="fas fa-balance-scale"></i> P/L Snapshot</div></div>
-        <div class="card-body no-top">
-          <div class="stat-strip">
-            <div class="ss-row">
-              <span class="ss-lbl">Gross Margin</span>
-              <span class="ss-val" style="color:${grossPos?'var(--green)':'var(--red)'}">${INR(Math.abs(s.grossPL||0))} ${grossPos?'P':'L'}</span>
-            </div>
-            <div class="ss-row">
-              <span class="ss-lbl">Net P/L</span>
-              <span class="ss-val" style="color:${netPos?'var(--green)':'var(--red)'}">${INR(Math.abs(s.netPL||0))} ${netPos?'P':'L'}</span>
-            </div>
-            <div class="ss-row">
-              <span class="ss-lbl">Net Margin %</span>
-              <span class="ss-val">${s.totalSale?((s.netPL/s.totalSale)*100).toFixed(1):0}%</span>
-            </div>
-            <div class="ss-row">
-              <span class="ss-lbl">Expense Ratio</span>
-              <span class="ss-val">${s.totalSale?((s.totalExpenses/s.totalSale)*100).toFixed(1):0}%</span>
-            </div>
-          </div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card" style="flex:1">
+        <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+          <span style="font-size:14px;font-weight:700;color:var(--text)"><i class="fas fa-balance-scale" style="color:var(--red);margin-right:8px"></i>P/L Snapshot</span>
+        </div>
+        <div class="card-p">
+          ${_kv('Gross Margin', INR(Math.abs(s.grossPL||0)) + (grossPos?' (P)':' (L)'), grossPos?'var(--green)':'var(--red)')}
+          ${_kv('Net P/L', INR(Math.abs(s.netPL||0)) + (netPos?' (P)':' (L)'), netPos?'var(--green)':'var(--red)')}
+          ${_kv('Net Margin %', (s.totalSale?((s.netPL/s.totalSale)*100).toFixed(1):0)+'%', netPos?'var(--green)':'var(--red)')}
+          ${_kv('Expense Ratio', (s.totalSale?((s.totalExpenses/s.totalSale)*100).toFixed(1):0)+'%', 'var(--amber)')}
         </div>
       </div>
-      <!-- Party Doughnut -->
       <div class="card">
-        <div class="card-hd"><div class="card-title"><i class="fas fa-chart-pie"></i> Sales Split</div></div>
-        <div class="card-body">
-          <div class="chart-box" style="height:130px"><canvas id="ch-party-dash"></canvas></div>
+        <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+          <span style="font-size:14px;font-weight:700;color:var(--text)"><i class="fas fa-chart-pie" style="color:var(--red);margin-right:8px"></i>Sales Split</span>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- RECENT ENTRIES -->
-  <div class="g2">
-    <div class="card">
-      <div class="card-hd">
-        <div class="card-title"><i class="fas fa-shopping-cart"></i> Recent Purchases</div>
-        <button class="btn btn-ghost btn-xs" onclick="goTo('purchase')">View All →</button>
-      </div>
-      <div class="card-body no-top">
-        ${_miniPurchaseTable(pur.slice(0,5))}
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-hd">
-        <div class="card-title"><i class="fas fa-truck"></i> Recent Sales</div>
-        <button class="btn btn-ghost btn-xs" onclick="goTo('sales')">View All →</button>
-      </div>
-      <div class="card-body no-top">
-        ${_miniSaleTable(sal.slice(0,5))}
+        <div class="card-p">
+          <div style="height:120px;position:relative"><canvas id="ch-party-dash"></canvas></div>
+        </div>
       </div>
     </div>
   </div>`;
 
-  // Draw charts
-  requestAnimationFrame(() => {
-    _drawTrend();
-    _drawPartyDash();
-  });
+  // Recent tables
+  const recent = `<div class="g2">
+    <div class="card">
+      <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:14px;font-weight:700"><i class="fas fa-shopping-cart" style="color:var(--red);margin-right:8px"></i>Recent Purchases</span>
+        <button class="btn btn-ghost btn-sm" onclick="goTo('purchase')" style="font-size:11px">View All →</button>
+      </div>
+      <div>${_miniPurchaseTable(pur.slice(0,5))}</div>
+    </div>
+    <div class="card">
+      <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:14px;font-weight:700"><i class="fas fa-truck" style="color:var(--green);margin-right:8px"></i>Recent Sales</span>
+        <button class="btn btn-ghost btn-sm" onclick="goTo('sales')" style="font-size:11px">View All →</button>
+      </div>
+      <div>${_miniSaleTable(sal.slice(0,5))}</div>
+    </div>
+  </div>`;
+
+  v.innerHTML = _pageHd('Dashboard', 'FY 2025–26 · Real-time Profit & Loss Overview',
+    `<button class="btn btn-secondary btn-sm" onclick="goTo('monthly')"><i class="fas fa-calendar-alt" style="margin-right:6px"></i>Monthly Report</button>
+     <button class="btn btn-secondary btn-sm" onclick="goTo('summary')"><i class="fas fa-chart-bar" style="margin-right:6px"></i>Annual</button>`
+  ) + cards + charts + recent;
+
+  requestAnimationFrame(() => { _drawTrend(); _drawPartyDash(); });
 }
 
 function _miniPurchaseTable(arr) {
-  if (!arr.length) return `<div class="tbl-empty"><i class="fas fa-inbox"></i><p>Koi purchase entry nahi</p></div>`;
-  let h = `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Qty</th><th>Amount</th></tr></thead><tbody>`;
-  arr.forEach(r => {
-    h += `<tr><td>${fmtD(r.date)}</td><td>${fmt0(r.qty)}</td><td class="mono">₹${fmt(r.amount)}</td></tr>`;
-  });
-  return h + `</tbody></table></div>`;
+  if (!arr.length) return _empty('Koi purchase entry nahi');
+  const rows = arr.map(r =>
+    `<tr>${_td(fmtD(r.date))}${_td(fmt0(r.qty))}${_td('₹'+fmt(r.amount),'num')}</tr>`
+  ).join('');
+  return _tbl(`${_th('Date')}${_th('Qty')}${_th('Amount')}`, rows);
 }
 
 function _miniSaleTable(arr) {
-  if (!arr.length) return `<div class="tbl-empty"><i class="fas fa-inbox"></i><p>Koi sale entry nahi</p></div>`;
-  let h = `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Party</th><th>Amount</th></tr></thead><tbody>`;
-  arr.forEach(r => {
+  if (!arr.length) return _empty('Koi sale entry nahi');
+  const rows = arr.map(r => {
     const cls = String(r.party||'').includes('LOCAL') ? 'b-red' : 'b-green';
-    h += `<tr><td>${fmtD(r.date)}</td><td><span class="badge ${cls}">${r.party||'—'}</span></td><td class="mono">₹${fmt(r.amount)}</td></tr>`;
-  });
-  return h + `</tbody></table></div>`;
+    return `<tr>${_td(fmtD(r.date))}${_td(`<span class="badge ${cls}">${r.party||'—'}</span>`)}${_td('₹'+fmt(r.amount),'num')}</tr>`;
+  }).join('');
+  return _tbl(`${_th('Date')}${_th('Party')}${_th('Amount')}`, rows);
 }
 
-/* ─────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
    ANNUAL SUMMARY
-───────────────────────────────────────────────────────── */
+═══════════════════════════════════════════════════════════ */
 function renderSummary() {
   const s    = DB.stats   || {};
   const rows = DB.summary || [];
   const v    = document.getElementById('v-summary');
   if (!v) return;
 
-  const netPos = (s.netPL||0) >= 0;
-  const curMo  = _curMonthLabel();
+  const netPos   = (s.netPL||0) >= 0;
+  const curMo    = _curMonthLabel();
+  const totGross = (s.totalSale||0) - (s.totalPurchase||0);
+  const totNet   = totGross - (s.totalExpenses||0);
 
   let tblRows = '';
-  let totP=0, totS=0, totE=0;
   rows.forEach(r => {
-    totP += r.purchase||0; totS += r.sale||0; totE += r.expenses||0;
-    const empty = !r.purchase && !r.sale && !r.expenses;
-    const gpos = (r.grossPL||0) >= 0;
-    const npos = (r.netPL||0)   >= 0;
-    const margin = r.sale ? ((r.netPL/r.sale)*100).toFixed(1) : 0;
-    const isCur = (r.month||'') === curMo;
-    tblRows += `<tr class="${isCur?'cur-month-row':''}">
-      <td style="font-weight:700">${r.month||'—'}</td>
-      <td class="mono">${r.purchase?'₹'+fmt(r.purchase):'—'}</td>
-      <td class="mono">${r.sale?'₹'+fmt(r.sale):'—'}</td>
-      <td class="mono">${r.expenses?'₹'+fmt(r.expenses):'—'}</td>
-      <td class="mono ${gpos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.grossPL))+(r.grossPL<0?' (L)':' (P)'):'—'}</td>
-      <td class="mono ${npos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.netPL))+(r.netPL<0?' (L)':' (P)'):'—'}</td>
-      <td class="mono ${npos&&!empty?'profit':!empty?'loss':''}">${!empty?margin+'%':'—'}</td>
+    const empty  = !r.purchase && !r.sale && !r.expenses;
+    const gpos   = (r.grossPL||0) >= 0;
+    const npos   = (r.netPL||0)   >= 0;
+    const margin = r.sale ? ((r.netPL/r.sale)*100).toFixed(1) : '—';
+    const isCur  = (r.month||'') === curMo;
+    tblRows += `<tr class="${isCur?'cur-month':''}">
+      <td style="font-weight:700">${r.month||'—'}${isCur?' <span class="badge b-amber" style="font-size:9px;margin-left:4px">Current</span>':''}</td>
+      <td class="num">${r.purchase?'₹'+fmt(r.purchase):'—'}</td>
+      <td class="num">${r.sale?'₹'+fmt(r.sale):'—'}</td>
+      <td class="num">${r.expenses?'₹'+fmt(r.expenses):'—'}</td>
+      <td class="num ${gpos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.grossPL))+(r.grossPL<0?' L':' P'):'—'}</td>
+      <td class="num ${npos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.netPL))+(r.netPL<0?' L':' P'):'—'}</td>
+      <td class="num">${margin !== '—' ? margin+'%' : '—'}</td>
     </tr>`;
   });
-
-  const totNet = totS - totP - totE;
-  const totGross = totS - totP;
   tblRows += `<tr class="total-row">
-    <td>TOTAL</td>
-    <td class="mono">₹${fmt(totP)}</td>
-    <td class="mono">₹${fmt(totS)}</td>
-    <td class="mono">₹${fmt(totE)}</td>
-    <td class="mono ${totGross>=0?'profit':'loss'}">₹${fmt(Math.abs(totGross))}${totGross<0?' (L)':' (P)'}</td>
-    <td class="mono ${totNet>=0?'profit':'loss'}">₹${fmt(Math.abs(totNet))}${totNet<0?' (L)':' (P)'}</td>
-    <td class="mono ${totNet>=0?'profit':'loss'}">${totS?((totNet/totS)*100).toFixed(1):0}%</td>
+    <td style="font-weight:800">TOTAL</td>
+    <td class="num">₹${fmt(s.totalPurchase)}</td>
+    <td class="num">₹${fmt(s.totalSale)}</td>
+    <td class="num">₹${fmt(s.totalExpenses)}</td>
+    <td class="num ${totGross>=0?'profit':'loss'}">₹${fmt(Math.abs(totGross))} ${totGross>=0?'P':'L'}</td>
+    <td class="num ${totNet>=0?'profit':'loss'}">₹${fmt(Math.abs(totNet))} ${totNet>=0?'P':'L'}</td>
+    <td class="num">${s.totalSale?((totNet/s.totalSale)*100).toFixed(1):0}%</td>
   </tr>`;
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Annual Summary</h2><p>FY 2025–26 · Month-wise complete P&L statement</p></div>
+  v.innerHTML = _pageHd('Annual Summary', 'FY 2025–26 · Month-wise complete P&L statement') +
+
+  `<div class="g4" style="margin-bottom:20px">
+    ${_statCard('YTD Purchase', INR(s.totalPurchase), '', 'sc-red', 'fa-shopping-cart')}
+    ${_statCard('YTD Sale', INR(s.totalSale), '', 'sc-green', 'fa-truck')}
+    ${_statCard('YTD Expenses', INR(s.totalExpenses), '', 'sc-amber', 'fa-file-invoice')}
+    ${_statCard(netPos?'Net Profit':'Net Loss', INR(Math.abs(s.netPL||0)), '', netPos?'sc-green':'sc-red', 'fa-chart-line')}
   </div>
 
-  <div class="krow">
-    <div class="kcard">
-      <div class="k-ico"><i class="fas fa-shopping-cart"></i></div>
-      <div class="k-val">${INR(s.totalPurchase)}</div>
-      <div class="k-label">YTD Purchase</div>
-    </div>
-    <div class="kcard green">
-      <div class="k-ico"><i class="fas fa-truck"></i></div>
-      <div class="k-val">${INR(s.totalSale)}</div>
-      <div class="k-label">YTD Sale</div>
-    </div>
-    <div class="kcard amber">
-      <div class="k-ico"><i class="fas fa-file-invoice"></i></div>
-      <div class="k-val">${INR(s.totalExpenses)}</div>
-      <div class="k-label">YTD Expenses</div>
-    </div>
-    <div class="kcard" style="--kc:${netPos?'var(--green)':'var(--red)'};--kb:${netPos?'var(--green-l)':'var(--red-l)'}">
-      <div class="k-ico"><i class="fas fa-chart-line"></i></div>
-      <div class="k-val" style="color:${netPos?'var(--green)':'var(--red)'}">${INR(Math.abs(s.netPL||0))}</div>
-      <div class="k-label">Net ${netPos?'Profit':'Loss'}</div>
-    </div>
-  </div>
-
-  <div class="g-6-4" style="margin-bottom:16px">
+  <div class="g2" style="margin-bottom:20px">
     <div class="card">
-      <div class="card-hd"><div class="card-title"><i class="fas fa-chart-bar"></i> Monthly Net P/L</div></div>
-      <div class="card-body">
-        <div class="chart-box" style="height:240px"><canvas id="ch-net"></canvas></div>
+      <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+        <span style="font-size:14px;font-weight:700"><i class="fas fa-chart-bar" style="color:var(--blue);margin-right:8px"></i>Monthly Net P/L</span>
       </div>
+      <div class="card-p"><div style="height:220px;position:relative"><canvas id="ch-net"></canvas></div></div>
     </div>
-    <div>
-      <div class="card">
-        <div class="card-hd"><div class="card-title"><i class="fas fa-info-circle"></i> FY Metrics</div></div>
-        <div class="card-body no-top">
-          <div class="stat-strip">
-            ${_ssRow('Total Purchase', INR(s.totalPurchase),'var(--brand)')}
-            ${_ssRow('Total Sale', INR(s.totalSale),'var(--green)')}
-            ${_ssRow('Total Expenses', INR(s.totalExpenses),'var(--amber)')}
-            ${_ssRow('Gross P/L', INR(Math.abs(totGross))+(totGross<0?' (L)':' (P)'),(totGross>=0?'var(--green)':'var(--red)'))}
-            ${_ssRow('Net P/L', INR(Math.abs(s.netPL||0))+(netPos?'(P)':'(L)'),(netPos?'var(--green)':'var(--red)'))}
-            ${_ssRow('Net Margin', (s.totalSale?((s.netPL/s.totalSale)*100).toFixed(1):0)+'%',(netPos?'var(--green)':'var(--red)'))}
-          </div>
-        </div>
+    <div class="card">
+      <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+        <span style="font-size:14px;font-weight:700"><i class="fas fa-info-circle" style="color:var(--red);margin-right:8px"></i>FY Metrics</span>
+      </div>
+      <div class="card-p">
+        ${_kv('Total Purchase', INR(s.totalPurchase), 'var(--red)')}
+        ${_kv('Total Sale', INR(s.totalSale), 'var(--green)')}
+        ${_kv('Total Expenses', INR(s.totalExpenses), 'var(--amber)')}
+        ${_kv('Gross P/L', INR(Math.abs(totGross))+(totGross>=0?' (P)':' (L)'), totGross>=0?'var(--green)':'var(--red)')}
+        ${_kv('Net P/L', INR(Math.abs(totNet))+(totNet>=0?' (P)':' (L)'), totNet>=0?'var(--green)':'var(--red)')}
+        ${_kv('Net Margin', (s.totalSale?((totNet/s.totalSale)*100).toFixed(1):0)+'%', totNet>=0?'var(--green)':'var(--red)')}
       </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-hd">
-      <div class="card-title"><i class="fas fa-table"></i> Month-wise Breakdown</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span class="badge b-brand" style="font-size:10px">Current month highlighted</span>
-        <span class="badge b-muted">${rows.length} months</span>
+    <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:14px;font-weight:700"><i class="fas fa-table" style="color:var(--red);margin-right:8px"></i>Month-wise Breakdown</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge b-amber" style="font-size:10px">★ Current month</span>
+        <span class="badge b-slate" style="font-size:10px">${rows.length} months</span>
       </div>
     </div>
-    <div class="card-body no-top">
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>Month</th><th>Purchase (₹)</th><th>Sale (₹)</th><th>Expenses (₹)</th><th>Gross P/L</th><th>Net P/L</th><th>Margin %</th></tr></thead>
-          <tbody>${tblRows||'<tr><td colspan="7" class="tbl-empty"><i class="fas fa-inbox"></i><p>Summary data nahi hai</p></td></tr>'}</tbody>
-        </table>
-      </div>
+    <div>
+      ${_tbl(
+        `${_th('Month')}${_th('Purchase (₹)')}${_th('Sale (₹)')}${_th('Expenses (₹)')}${_th('Gross P/L')}${_th('Net P/L')}${_th('Margin %')}`,
+        tblRows || null
+      )}
     </div>
   </div>`;
 
@@ -709,105 +710,77 @@ function renderSummary() {
     if (c.labels && c.labels.length) {
       _drawChart('ch-net', 'bar', c.labels, [{
         label: 'Net P/L',
-        data: (c.net||[]),
-        backgroundColor: (c.net||[]).map(v => v >= 0 ? 'rgba(39,174,96,.75)' : 'rgba(192,57,43,.75)'),
+        data: c.net||[],
+        backgroundColor: (c.net||[]).map(v => v >= 0 ? 'rgba(52,168,83,.75)' : 'rgba(234,67,53,.75)'),
         borderRadius: 5, borderSkipped: false
       }], false, true);
     }
   });
 }
 
-function _ssRow(lbl, val, color) {
-  return `<div class="ss-row"><span class="ss-lbl">${lbl}</span><span class="ss-val" style="color:${color}">${val}</span></div>`;
-}
-
-/* ─────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
    PURCHASE VIEW
-───────────────────────────────────────────────────────── */
-function renderPurchase() {
-  const arr = DB.purchases || [];
-  const v   = document.getElementById('v-purchase');
+═══════════════════════════════════════════════════════════ */
+function renderPurchase(pg) {
+  if (pg !== undefined) _page.purchase = pg;
+  const arr  = DB.purchases || [];
+  const v    = document.getElementById('v-purchase');
   if (!v) return;
 
-  const q  = document.getElementById('pur-q') ? document.getElementById('pur-q').value.trim() : '';
+  const q        = document.getElementById('pur-q') ? document.getElementById('pur-q').value.trim() : '';
   const filtered = q ? arr.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase())) : arr;
-  const page = _page.purchase;
-  const total = filtered.length;
-  const rows = filtered.slice((page-1)*PER, page*PER);
+  const page     = _page.purchase;
+  const total    = filtered.length;
+  const rows     = filtered.slice((page-1)*PER, page*PER);
+  const s        = DB.stats || {};
 
-  let tblH = '';
-  rows.forEach((r, i) => {
-    tblH += `<tr>
-      <td style="color:var(--sub);font-size:11px">${(page-1)*PER+i+1}</td>
-      <td><strong>${fmtD(r.date)}</strong></td>
-      <td>${fmt0(r.qty)}</td>
-      <td class="mono">₹${fmt(r.amount)}</td>
-      <td style="font-size:11.5px;color:var(--muted)">${r.by||'—'}</td>
-      <td style="font-size:11px;color:var(--sub)">${r.ts||'—'}</td>
-    </tr>`;
-  });
+  const tblRows = rows.map((r, i) => `<tr>
+    <td style="color:var(--sub);font-size:11px;width:40px">${(page-1)*PER+i+1}</td>
+    <td style="font-weight:600">${fmtD(r.date)}</td>
+    <td>${fmt0(r.qty)}</td>
+    <td class="num">₹${fmt(r.amount)}</td>
+    <td style="color:var(--muted);font-size:12px">${r.by||'—'}</td>
+    <td style="color:var(--sub);font-size:11px">${r.ts||'—'}</td>
+  </tr>`).join('');
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Purchase Entry</h2><p>Daily purchase record karein</p></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-ghost btn-sm" onclick="exportCSV('purchase')"><i class="fas fa-download"></i> Export CSV</button>
-      <button class="btn btn-brand" onclick="openModal('m-pur')"><i class="fas fa-plus"></i> New Entry</button>
-    </div>
-  </div>
+  v.innerHTML = _pageHd('Purchase Entry', 'Daily purchase record karein',
+    `${_btnSecondary('Export CSV','exportCSV(\'purchase\')','fa-download')}
+     ${_btnPrimary('New Entry','openModal(\'m-pur\')','fa-plus')}`
+  ) +
 
-  <!-- Quick Stats -->
-  <div class="g3" style="margin-bottom:16px">
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Total Entries</div>
-        <div style="font-size:22px;font-weight:900;color:var(--text)">${arr.length}</div>
-      </div>
-    </div>
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Total Purchase</div>
-        <div style="font-size:22px;font-weight:900;color:var(--brand)">${INR(DB.stats.totalPurchase||0)}</div>
-      </div>
-    </div>
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Avg. per Entry</div>
-        <div style="font-size:22px;font-weight:900;color:var(--text)">${arr.length?INR(Math.round((DB.stats.totalPurchase||0)/arr.length)):'—'}</div>
-      </div>
-    </div>
+  `<div class="g3" style="margin-bottom:20px">
+    ${_statCard('Total Entries', arr.length, '', 'sc-slate', 'fa-hashtag')}
+    ${_statCard('Total Purchase', INR(s.totalPurchase||0), '', 'sc-red', 'fa-shopping-cart')}
+    ${_statCard('Avg. per Entry', arr.length?INR(Math.round((s.totalPurchase||0)/arr.length)):'—', '', 'sc-blue', 'fa-calculator')}
   </div>
 
   <div class="card">
-    <div class="card-hd">
-      <div class="card-title"><i class="fas fa-list"></i> Purchase History</div>
+    <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+      <span style="font-size:14px;font-weight:700"><i class="fas fa-list" style="color:var(--red);margin-right:8px"></i>Purchase History</span>
     </div>
-    <div class="card-body no-top">
-      <div class="srch-row">
-        <div class="srch-wrap"><i class="fas fa-search"></i><input class="srch-inp" id="pur-q" placeholder="Search date, amount, qty…" value="${q}" oninput="_page.purchase=1;renderPurchase()"></div>
-        <span class="badge b-muted">${total} records</span>
-      </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>#</th><th>Date</th><th>Qty</th><th>Amount</th><th>Added By</th><th>Timestamp</th></tr></thead>
-          <tbody>${tblH||'<tr><td colspan="6" class="tbl-empty"><i class="fas fa-inbox"></i><p>Koi purchase entry nahi</p></td></tr>'}</tbody>
-        </table>
-      </div>
-      <div class="pager">
-        <span>${total?`${(page-1)*PER+1}–${Math.min(page*PER,total)} of ${total} entries`:''}</span>
-        <div class="pager-btns">
-          <button class="pager-btn" ${page<=1?'disabled':''} onclick="_page.purchase--;renderPurchase()">← Prev</button>
-          <button class="pager-btn" ${page>=Math.ceil(total/PER)?'disabled':''} onclick="_page.purchase++;renderPurchase()">Next →</button>
+    <div class="card-p">
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="search-wrap" style="flex:1;min-width:200px">
+          <i class="fas fa-search"></i>
+          <input class="form-input" id="pur-q" placeholder="Search date, amount, qty…" value="${q}"
+                 oninput="_page.purchase=1;renderPurchase()" style="padding-left:32px">
         </div>
+        <span class="badge b-slate" style="align-self:center">${total} records</span>
       </div>
+      ${_tbl(
+        `${_th('#')}${_th('Date')}${_th('Qty')}${_th('Amount')}${_th('Added By')}${_th('Timestamp')}`,
+        tblRows || null
+      )}
     </div>
+    ${_pager(page, total, PER, 'renderPurchase')}
   </div>`;
 }
 
-/* ─────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
    SALES VIEW
-───────────────────────────────────────────────────────── */
-function renderSales() {
+═══════════════════════════════════════════════════════════ */
+function renderSales(pg) {
+  if (pg !== undefined) _page.sales = pg;
   const arr = DB.sales || [];
   const v   = document.getElementById('v-sales');
   if (!v) return;
@@ -817,234 +790,186 @@ function renderSales() {
   let filtered = q ? arr.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase())) : arr;
   if (filt !== 'all') filtered = filtered.filter(r => (r.party||'').toLowerCase().includes(filt.toLowerCase()));
 
-  const page  = _page.sales;
-  const total = filtered.length;
-  const rows  = filtered.slice((page-1)*PER, page*PER);
-
+  const page     = _page.sales;
+  const total    = filtered.length;
+  const rows     = filtered.slice((page-1)*PER, page*PER);
   const locTotal = arr.filter(r=>(r.party||'').includes('LOCAL')).reduce((s,r)=>s+(r.amount||0),0);
-  const supTotal = arr.filter(r=>(r.party||'').includes('SUPPLY')).reduce((s,r)=>s+(r.amount||0),0);
+  const supTotal = arr.filter(r=>!(r.party||'').includes('LOCAL')).reduce((s,r)=>s+(r.amount||0),0);
+  const s        = DB.stats || {};
 
-  let tblH = '';
-  rows.forEach((r, i) => {
+  const tblRows = rows.map((r, i) => {
     const cls = String(r.party||'').includes('LOCAL') ? 'b-red' : 'b-green';
-    tblH += `<tr>
-      <td style="color:var(--sub);font-size:11px">${(page-1)*PER+i+1}</td>
-      <td><strong>${fmtD(r.date)}</strong></td>
+    return `<tr>
+      <td style="color:var(--sub);font-size:11px;width:40px">${(page-1)*PER+i+1}</td>
+      <td style="font-weight:600">${fmtD(r.date)}</td>
       <td><span class="badge ${cls}">${r.party||'—'}</span></td>
       <td>${fmt0(r.qty)}</td>
-      <td class="mono">₹${fmt(r.amount)}</td>
-      <td style="font-size:11.5px;color:var(--muted)">${r.by||'—'}</td>
+      <td class="num">₹${fmt(r.amount)}</td>
+      <td style="color:var(--muted);font-size:12px">${r.by||'—'}</td>
     </tr>`;
-  });
+  }).join('');
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Sales Entry</h2><p>Party-wise daily sales record karein</p></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-ghost btn-sm" onclick="exportCSV('sales')"><i class="fas fa-download"></i> Export CSV</button>
-      <button class="btn btn-green" onclick="openModal('m-sal')"><i class="fas fa-plus"></i> New Entry</button>
-    </div>
-  </div>
+  v.innerHTML = _pageHd('Sales Entry', 'Party-wise daily sales record karein',
+    `${_btnSecondary('Export CSV','exportCSV(\'sales\')','fa-download')}
+     <button class="btn btn-green btn-sm" onclick="openModal('m-sal')"><i class="fas fa-plus" style="margin-right:6px"></i>New Entry</button>`
+  ) +
 
-  <div class="g3" style="margin-bottom:16px">
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px"><span class="badge b-brand" style="font-size:10px">LOCAL SALE</span></div>
-        <div style="font-size:22px;font-weight:900;color:var(--brand)">${INR(locTotal)}</div>
-      </div>
-    </div>
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px"><span class="badge b-green" style="font-size:10px">SUPPLY SALE</span></div>
-        <div style="font-size:22px;font-weight:900;color:var(--green)">${INR(supTotal)}</div>
-      </div>
-    </div>
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Total Sale</div>
-        <div style="font-size:22px;font-weight:900;color:var(--text)">${INR(DB.stats.totalSale||0)}</div>
-      </div>
-    </div>
+  `<div class="g3" style="margin-bottom:20px">
+    ${_statCard('LOCAL SALE', INR(locTotal), '', 'sc-red', 'fa-store')}
+    ${_statCard('SUPPLY SALE', INR(supTotal), '', 'sc-green', 'fa-truck')}
+    ${_statCard('Total Sale', INR(s.totalSale||0), '', 'sc-blue', 'fa-chart-line')}
   </div>
 
   <div class="card">
-    <div class="card-hd"><div class="card-title"><i class="fas fa-list"></i> Sales History</div></div>
-    <div class="card-body no-top">
-      <div class="srch-row">
-        <div class="srch-wrap"><i class="fas fa-search"></i><input class="srch-inp" id="sal-q" placeholder="Search sales…" value="${q}" oninput="_page.sales=1;renderSales()"></div>
-        <select class="srch-inp" id="sal-f" style="width:160px;flex:none" onchange="_page.sales=1;renderSales()">
-          <option value="all">All Parties</option>
+    <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+      <span style="font-size:14px;font-weight:700"><i class="fas fa-list" style="color:var(--green);margin-right:8px"></i>Sales History</span>
+    </div>
+    <div class="card-p">
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="search-wrap" style="flex:1;min-width:180px">
+          <i class="fas fa-search"></i>
+          <input class="form-input" id="sal-q" placeholder="Search sales…" value="${q}"
+                 oninput="_page.sales=1;renderSales()" style="padding-left:32px">
+        </div>
+        <select class="form-input" id="sal-f" style="width:150px;flex:none" onchange="_page.sales=1;renderSales()">
+          <option value="all" ${filt==='all'?'selected':''}>All Parties</option>
           <option value="LOCAL" ${filt==='LOCAL'?'selected':''}>LOCAL SALE</option>
           <option value="SUPPLY" ${filt==='SUPPLY'?'selected':''}>SUPPLY SALE</option>
         </select>
-        <span class="badge b-muted">${total} records</span>
+        <span class="badge b-slate" style="align-self:center">${total} records</span>
       </div>
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>#</th><th>Date</th><th>Party</th><th>Qty</th><th>Amount</th><th>Added By</th></tr></thead>
-          <tbody>${tblH||'<tr><td colspan="6" class="tbl-empty"><i class="fas fa-inbox"></i><p>Koi sale entry nahi</p></td></tr>'}</tbody>
-        </table>
-      </div>
-      <div class="pager">
-        <span>${total?`${(page-1)*PER+1}–${Math.min(page*PER,total)} of ${total} entries`:''}</span>
-        <div class="pager-btns">
-          <button class="pager-btn" ${page<=1?'disabled':''} onclick="_page.sales--;renderSales()">← Prev</button>
-          <button class="pager-btn" ${page>=Math.ceil(total/PER)?'disabled':''} onclick="_page.sales++;renderSales()">Next →</button>
-        </div>
-      </div>
+      ${_tbl(
+        `${_th('#')}${_th('Date')}${_th('Party')}${_th('Qty')}${_th('Amount')}${_th('Added By')}`,
+        tblRows || null
+      )}
     </div>
+    ${_pager(page, total, PER, 'renderSales')}
   </div>`;
 }
 
-/* ─────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
    EXPENSES VIEW
-───────────────────────────────────────────────────────── */
+═══════════════════════════════════════════════════════════ */
 function renderExpenses() {
   const arr = DB.expenses || [];
   const v   = document.getElementById('v-expenses');
   if (!v) return;
+  const s   = DB.stats || {};
 
-  let tblH = '';
-  arr.forEach((r, i) => {
-    tblH += `<tr>
-      <td style="color:var(--sub);font-size:11px">${i+1}</td>
-      <td style="font-weight:700">${r.month||'—'}</td>
-      <td class="mono">₹${fmt(r.amount)}</td>
-      <td style="font-size:11.5px;color:var(--muted)">${r.by||'—'}</td>
-      <td style="font-size:11px;color:var(--sub)">${r.ts||'—'}</td>
-    </tr>`;
-  });
+  const tblRows = arr.map((r, i) => `<tr>
+    <td style="color:var(--sub);font-size:11px;width:40px">${i+1}</td>
+    <td style="font-weight:600">${r.month||'—'}</td>
+    <td class="num">₹${fmt(r.amount)}</td>
+    <td style="color:var(--muted);font-size:12px">${r.by||'—'}</td>
+    <td style="color:var(--sub);font-size:11px">${r.ts||'—'}</td>
+  </tr>`).join('');
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Expenses Entry</h2><p>Monthly operational expenses record karein</p></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-ghost btn-sm" onclick="exportCSV('expenses')"><i class="fas fa-download"></i> Export CSV</button>
-      <button class="btn btn-amber" onclick="openModal('m-exp')"><i class="fas fa-plus"></i> New Entry</button>
-    </div>
-  </div>
+  v.innerHTML = _pageHd('Expenses Entry', 'Monthly operational expenses record karein',
+    `${_btnSecondary('Export CSV','exportCSV(\'expenses\')','fa-download')}
+     <button class="btn btn-amber btn-sm" onclick="openModal('m-exp')"><i class="fas fa-plus" style="margin-right:6px"></i>New Entry</button>`
+  ) +
 
-  <div class="g2" style="margin-bottom:16px">
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Total Expenses (YTD)</div>
-        <div style="font-size:24px;font-weight:900;color:var(--amber)">${INR(DB.stats.totalExpenses||0)}</div>
-      </div>
-    </div>
-    <div class="card" style="margin:0">
-      <div class="card-body" style="padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Expense Ratio (vs Sale)</div>
-        <div style="font-size:24px;font-weight:900;color:var(--text)">${DB.stats.totalSale?((DB.stats.totalExpenses/DB.stats.totalSale)*100).toFixed(1):0}%</div>
-      </div>
-    </div>
+  `<div class="g2" style="margin-bottom:20px">
+    ${_statCard('Total Expenses (YTD)', INR(s.totalExpenses||0), '', 'sc-amber', 'fa-file-invoice-dollar')}
+    ${_statCard('Expense Ratio (vs Sale)', (s.totalSale?((s.totalExpenses/s.totalSale)*100).toFixed(1):0)+'%', '', 'sc-blue', 'fa-percent')}
   </div>
 
   <div class="card">
-    <div class="card-hd">
-      <div class="card-title"><i class="fas fa-list"></i> Expenses History</div>
+    <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:14px;font-weight:700"><i class="fas fa-list" style="color:var(--amber);margin-right:8px"></i>Expenses History</span>
       <span class="badge b-amber">${arr.length} entries</span>
     </div>
-    <div class="card-body no-top">
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>#</th><th>Month</th><th>Amount</th><th>Added By</th><th>Timestamp</th></tr></thead>
-          <tbody>${tblH||'<tr><td colspan="5" class="tbl-empty"><i class="fas fa-inbox"></i><p>Koi expense entry nahi</p></td></tr>'}</tbody>
-        </table>
-      </div>
+    <div>
+      ${_tbl(
+        `${_th('#')}${_th('Month')}${_th('Amount')}${_th('Added By')}${_th('Timestamp')}`,
+        tblRows || null
+      )}
     </div>
   </div>`;
 }
 
-/* ─────────────────────────────────────────────────────────
-   MONTHLY P&L VIEW
-───────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   MONTHLY P&L
+═══════════════════════════════════════════════════════════ */
 function renderMonthly() {
   const rows  = DB.summary || [];
   const v     = document.getElementById('v-monthly');
   const curMo = _curMonthLabel();
   if (!v) return;
 
-  let tblH = '';
   let totP=0, totS=0, totE=0;
-  rows.forEach(r => {
+  const tblRows = rows.map(r => {
     totP += r.purchase||0; totS += r.sale||0; totE += r.expenses||0;
     const empty = !r.purchase && !r.sale && !r.expenses;
     const gpos  = (r.grossPL||0) >= 0;
     const npos  = (r.netPL||0)   >= 0;
-    const margin = r.sale ? ((r.netPL/r.sale)*100).toFixed(1) : 0;
+    const margin = r.sale ? ((r.netPL/r.sale)*100).toFixed(1) : '—';
     const isCur  = (r.month||'') === curMo;
-    tblH += `<tr class="${isCur?'cur-month-row':''}">
-      <td style="font-weight:700;white-space:nowrap">${r.month||'—'} ${isCur?'<span class="badge b-brand" style="font-size:9px;margin-left:4px">Current</span>':''}</td>
-      <td class="mono">${r.purchase?'₹'+fmt(r.purchase):'—'}</td>
-      <td class="mono">${r.sale?'₹'+fmt(r.sale):'—'}</td>
-      <td class="mono">${r.expenses?'₹'+fmt(r.expenses):'—'}</td>
-      <td class="mono ${gpos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.grossPL))+(r.grossPL<0?' (L)':' (P)'):'—'}</td>
-      <td class="mono ${npos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.netPL))+(r.netPL<0?' (L)':' (P)'):'—'}</td>
-      <td class="mono">${!empty?margin+'%':'—'}</td>
+    return `<tr class="${isCur?'cur-month':''}">
+      <td style="font-weight:700;white-space:nowrap">${r.month||'—'}${isCur?' <span class="badge b-amber" style="font-size:9px;margin-left:4px">Current</span>':''}</td>
+      <td class="num">${r.purchase?'₹'+fmt(r.purchase):'—'}</td>
+      <td class="num">${r.sale?'₹'+fmt(r.sale):'—'}</td>
+      <td class="num">${r.expenses?'₹'+fmt(r.expenses):'—'}</td>
+      <td class="num ${gpos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.grossPL))+(r.grossPL<0?' L':' P'):'—'}</td>
+      <td class="num ${npos&&!empty?'profit':!empty?'loss':''}">${!empty?'₹'+fmt(Math.abs(r.netPL))+(r.netPL<0?' L':' P'):'—'}</td>
+      <td class="num">${margin !== '—' ? margin+'%' : '—'}</td>
     </tr>`;
-  });
+  }).join('');
 
   const totNet   = totS - totP - totE;
   const totGross = totS - totP;
-  tblH += `<tr class="total-row">
-    <td>TOTAL</td>
-    <td class="mono">₹${fmt(totP)}</td>
-    <td class="mono">₹${fmt(totS)}</td>
-    <td class="mono">₹${fmt(totE)}</td>
-    <td class="mono ${totGross>=0?'profit':'loss'}">₹${fmt(Math.abs(totGross))}${totGross<0?' (L)':' (P)'}</td>
-    <td class="mono ${totNet>=0?'profit':'loss'}">₹${fmt(Math.abs(totNet))}${totNet<0?' (L)':' (P)'}</td>
-    <td class="mono">${totS?((totNet/totS)*100).toFixed(1):0}%</td>
+  const totalRow = `<tr class="total-row">
+    <td style="font-weight:800">TOTAL</td>
+    <td class="num">₹${fmt(totP)}</td>
+    <td class="num">₹${fmt(totS)}</td>
+    <td class="num">₹${fmt(totE)}</td>
+    <td class="num ${totGross>=0?'profit':'loss'}">₹${fmt(Math.abs(totGross))} ${totGross>=0?'P':'L'}</td>
+    <td class="num ${totNet>=0?'profit':'loss'}">₹${fmt(Math.abs(totNet))} ${totNet>=0?'P':'L'}</td>
+    <td class="num">${totS?((totNet/totS)*100).toFixed(1):0}%</td>
   </tr>`;
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Monthly P&L</h2><p>Month-wise detailed profit & loss statement</p></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-ghost btn-sm" onclick="exportCSV('summary')"><i class="fas fa-download"></i> Export CSV</button>
-      <button class="btn btn-ghost btn-sm" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
-    </div>
-  </div>
+  v.innerHTML = _pageHd('Monthly P&L', 'Month-wise detailed profit & loss statement',
+    `${_btnSecondary('Export CSV','exportCSV(\'summary\')','fa-download')}
+     ${_btnSecondary('Print','window.print()','fa-print')}`
+  ) +
 
-  <div class="card">
-    <div class="card-hd">
-      <div class="card-title"><i class="fas fa-table"></i> Month-wise P&L Statement</div>
+  `<div class="card" style="margin-bottom:20px">
+    <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:14px;font-weight:700"><i class="fas fa-table" style="color:var(--red);margin-right:8px"></i>Month-wise P&L Statement</span>
       <div style="display:flex;gap:6px">
-        <span class="badge b-brand" style="font-size:10px">★ Current month</span>
-        <span class="badge b-muted">${rows.length} months</span>
+        <span class="badge b-amber" style="font-size:10px">★ Current month</span>
+        <span class="badge b-slate" style="font-size:10px">${rows.length} months</span>
       </div>
     </div>
-    <div class="card-body no-top">
-      <div class="tbl-wrap">
-        <table>
-          <thead><tr><th>Month</th><th>Purchase</th><th>Sale</th><th>Expenses</th><th>Gross P/L</th><th>Net P/L</th><th>Margin %</th></tr></thead>
-          <tbody>${tblH||'<tr><td colspan="7" class="tbl-empty"><i class="fas fa-inbox"></i><p>Data nahi hai</p></td></tr>'}</tbody>
-        </table>
-      </div>
+    <div>
+      ${_tbl(
+        `${_th('Month')}${_th('Purchase')}${_th('Sale')}${_th('Expenses')}${_th('Gross P/L')}${_th('Net P/L')}${_th('Margin %')}`,
+        (tblRows + totalRow) || null
+      )}
     </div>
   </div>
 
-  <!-- Monthly Bar Chart -->
   <div class="card">
-    <div class="card-hd"><div class="card-title"><i class="fas fa-chart-bar"></i> Monthly P vs S vs Expenses</div></div>
-    <div class="card-body">
-      <div class="chart-box" style="height:260px"><canvas id="ch-monthly"></canvas></div>
+    <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+      <span style="font-size:14px;font-weight:700"><i class="fas fa-chart-bar" style="color:var(--blue);margin-right:8px"></i>Monthly Purchase vs Sale vs Expenses</span>
     </div>
+    <div class="card-p"><div style="height:260px;position:relative"><canvas id="ch-monthly"></canvas></div></div>
   </div>`;
 
   requestAnimationFrame(() => {
     const c = DB.chart || {};
     if (c.labels && c.labels.length) {
       _drawChart('ch-monthly', 'bar', c.labels, [
-        { label:'Purchase', data:c.purchase||[], backgroundColor:'rgba(192,57,43,.7)', borderRadius:4 },
-        { label:'Sale',     data:c.sale||[],     backgroundColor:'rgba(39,174,96,.7)',  borderRadius:4 },
+        { label:'Purchase', data:c.purchase||[], backgroundColor:'rgba(234,67,53,.7)', borderRadius:4 },
+        { label:'Sale',     data:c.sale||[],     backgroundColor:'rgba(52,168,83,.7)',  borderRadius:4 },
       ], true, false);
     }
   });
 }
 
-/* ─────────────────────────────────────────────────────────
+/* ═══════════════════════════════════════════════════════════
    PARTY ANALYSIS
-───────────────────────────────────────────────────────── */
+═══════════════════════════════════════════════════════════ */
 function renderAnalysis() {
   const pm    = DB.partyMap || {};
   const keys  = Object.keys(pm);
@@ -1052,217 +977,194 @@ function renderAnalysis() {
   const v     = document.getElementById('v-analysis');
   if (!v) return;
 
-  const COLORS = ['var(--brand)','var(--green)','var(--amber)','var(--blue)','var(--purple)'];
-  const BGS    = ['var(--brand-l)','var(--green-l)','var(--amber-l)','var(--blue-l)','var(--purple-l)'];
-  const HEX    = ['#C0392B','#27AE60','#E67E22','#2980B9','#8E44AD'];
+  const COLORS_CLS = ['sc-red','sc-green','sc-amber','sc-blue','sc-slate'];
+  const HEX = ['#EA4335','#34A853','#FBBC05','#4285F4','#64748B'];
+  const BADGE_CLS = ['b-red','b-green','b-amber','b-blue','b-slate'];
 
-  let kCards = keys.map((k,i)=>{
+  const statCards = keys.map((k,i) => {
     const pct = total>0?((pm[k].total/total)*100).toFixed(1):0;
-    return `<div class="kcard" style="--kc:${COLORS[i%COLORS.length]};--kb:${BGS[i%BGS.length]}">
-      <div class="k-ico"><i class="fas fa-store"></i></div>
-      <div class="k-val">${INR(pm[k].total)}</div>
-      <div class="k-label">${k}</div>
-      <div class="k-sub">${pm[k].count} transactions · ${pct}%</div>
-    </div>`;
+    return _statCard(k, INR(pm[k].total), `${pm[k].count} transactions · ${pct}%`, COLORS_CLS[i%COLORS_CLS.length], 'fa-store');
   }).join('');
 
-  let tblH = keys.map((k,i)=>{
+  const tblRows = keys.map((k,i) => {
     const pct = total>0?((pm[k].total/total)*100).toFixed(1):0;
-    const avg  = pm[k].count ? Math.round(pm[k].total/pm[k].count) : 0;
+    const avg = pm[k].count ? Math.round(pm[k].total/pm[k].count) : 0;
     return `<tr>
-      <td><span class="badge" style="background:${BGS[i%BGS.length]};color:${COLORS[i%COLORS.length]}">${k}</span></td>
-      <td class="mono">₹${fmt(pm[k].total)}</td>
+      <td><span class="badge ${BADGE_CLS[i%BADGE_CLS.length]}">${k}</span></td>
+      <td class="num">₹${fmt(pm[k].total)}</td>
       <td>${pm[k].count}</td>
-      <td class="mono">₹${fmt(avg)}</td>
-      <td>
+      <td class="num">₹${fmt(avg)}</td>
+      <td style="min-width:120px">
         <div style="display:flex;align-items:center;gap:8px">
           <div style="flex:1;height:6px;background:var(--border);border-radius:6px;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${HEX[i%HEX.length]};border-radius:6px;transition:width .6s"></div>
+            <div style="height:100%;width:${pct}%;background:${HEX[i%HEX.length]};border-radius:6px"></div>
           </div>
-          <span style="font-size:11px;font-weight:700;color:${COLORS[i%COLORS.length]};min-width:36px">${pct}%</span>
+          <span style="font-size:11px;font-weight:700;color:${HEX[i%HEX.length]};min-width:38px">${pct}%</span>
         </div>
       </td>
     </tr>`;
   }).join('');
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Party Analysis</h2><p>Party-wise sales breakdown & insights</p></div>
-  </div>
+  v.innerHTML = _pageHd('Party Analysis', 'Party-wise sales breakdown & insights') +
 
-  <div class="krow">${kCards||'<div style="grid-column:1/-1;text-align:center;color:var(--sub);padding:20px">Data nahi hai</div>'}</div>
+  `<div class="g${Math.min(keys.length||1,4)}" style="margin-bottom:20px">${statCards||_empty('Party data nahi hai')}</div>
 
-  <div class="g-6-4">
+  <div class="g2">
     <div class="card">
-      <div class="card-hd"><div class="card-title"><i class="fas fa-table"></i> Party-wise Details</div></div>
-      <div class="card-body no-top">
-        <div class="tbl-wrap">
-          <table>
-            <thead><tr><th>Party</th><th>Total (₹)</th><th>Transactions</th><th>Avg. (₹)</th><th>Share %</th></tr></thead>
-            <tbody>${tblH||'<tr><td colspan="5" class="tbl-empty"><i class="fas fa-inbox"></i><p>Data nahi</p></td></tr>'}</tbody>
-          </table>
-        </div>
+      <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+        <span style="font-size:14px;font-weight:700"><i class="fas fa-table" style="color:var(--red);margin-right:8px"></i>Party-wise Details</span>
+      </div>
+      <div>
+        ${_tbl(`${_th('Party')}${_th('Total (₹)')}${_th('Transactions')}${_th('Avg. (₹)')}${_th('Share %')}`, tblRows||null)}
       </div>
     </div>
-    <div>
-      <div class="card">
-        <div class="card-hd"><div class="card-title"><i class="fas fa-chart-pie"></i> Sales Split</div></div>
-        <div class="card-body">
-          <div class="chart-box" style="height:200px"><canvas id="ch-party-a"></canvas></div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="card" style="flex:1">
+        <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+          <span style="font-size:14px;font-weight:700"><i class="fas fa-chart-pie" style="color:var(--red);margin-right:8px"></i>Sales Split</span>
         </div>
+        <div class="card-p"><div style="height:200px;position:relative"><canvas id="ch-party-a"></canvas></div></div>
       </div>
-      <div class="card" style="margin-top:16px">
-        <div class="card-hd"><div class="card-title"><i class="fas fa-info-circle"></i> Summary</div></div>
-        <div class="card-body no-top">
-          <div class="stat-strip">
-            ${_ssRow('Total Sale', INR(total), 'var(--green)')}
-            ${_ssRow('Parties', keys.length + ' types', 'var(--text)')}
-            ${_ssRow('Total Transactions', (DB.stats.saleCount||0) + ' entries', 'var(--text)')}
-          </div>
+      <div class="card">
+        <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+          <span style="font-size:14px;font-weight:700"><i class="fas fa-info-circle" style="color:var(--red);margin-right:8px"></i>Summary</span>
+        </div>
+        <div class="card-p">
+          ${_kv('Total Sale', INR(total), 'var(--green)')}
+          ${_kv('Party Types', keys.length+' types', 'var(--text)')}
+          ${_kv('Total Transactions', (DB.stats.saleCount||0)+' entries', 'var(--text)')}
         </div>
       </div>
     </div>
   </div>`;
 
   requestAnimationFrame(() => {
-    if (keys.length) {
-      _drawDoughnut('ch-party-a', keys, keys.map(k=>pm[k].total), HEX);
-    }
+    if (keys.length) _drawDoughnut('ch-party-a', keys, keys.map(k=>pm[k].total), HEX);
   });
 }
 
-/* ─────────────────────────────────────────────────────────
-   INSIGHTS VIEW
-───────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   INSIGHTS
+═══════════════════════════════════════════════════════════ */
 function renderInsights() {
   const s    = DB.stats   || {};
   const rows = DB.summary || [];
   const v    = document.getElementById('v-insights');
   if (!v) return;
 
-  // Calculate insights
   const netPos   = (s.netPL||0) >= 0;
   const margin   = s.totalSale ? ((s.netPL/s.totalSale)*100).toFixed(1) : 0;
   const expRatio = s.totalSale ? ((s.totalExpenses/s.totalSale)*100).toFixed(1) : 0;
   const purRatio = s.totalSale ? ((s.totalPurchase/s.totalSale)*100).toFixed(1) : 0;
 
-  // Best & worst months
-  const withData  = rows.filter(r => r.sale || r.purchase);
-  const bestMonth = withData.sort((a,b)=>(b.netPL||0)-(a.netPL||0))[0];
-  const worstMonth= [...withData].sort((a,b)=>(a.netPL||0)-(b.netPL||0))[0];
+  const withData   = rows.filter(r => r.sale || r.purchase);
+  const sorted     = [...withData].sort((a,b)=>(b.netPL||0)-(a.netPL||0));
+  const bestMonth  = sorted[0];
+  const worstMonth = sorted[sorted.length-1];
 
   const insights = [
-    {
-      icon: 'fa-chart-line', color: netPos?'var(--green)':'var(--red)', bg: netPos?'var(--green-l)':'var(--red-l)',
+    { icon:'fa-chart-line', color:netPos?'var(--green)':'var(--red)', bg:netPos?'var(--green-l)':'var(--red-l)',
       title: netPos ? '✅ Business Profitable Hai' : '⚠️ Net Loss Mein Hai',
       desc: `FY 2025–26 mein Net P/L <strong>${INR(Math.abs(s.netPL||0))}</strong> ${netPos?'profit':'loss'} hai. Net margin <strong>${margin}%</strong>.`
     },
-    {
-      icon: 'fa-file-invoice', color:'var(--amber)', bg:'var(--amber-l)',
+    { icon:'fa-file-invoice', color:'var(--amber)', bg:'var(--amber-l)',
       title: `Expense Ratio: ${expRatio}%`,
-      desc: `Har ₹100 sale par ₹${expRatio} expenses ja rahe hain. ${+expRatio>30?'Expenses thode zyada hain — control karne ki zaroorat.':'Expenses controlled hain — achha hai!'}`
+      desc: `Har ₹100 sale par ₹${expRatio} expenses ja rahe hain. ${+expRatio>30?'Expenses thode zyada hain.':'Expenses controlled hain — achha hai!'}`
     },
-    {
-      icon: 'fa-shopping-cart', color:'var(--brand)', bg:'var(--brand-l)',
+    { icon:'fa-shopping-cart', color:'var(--red)', bg:'var(--red-l)',
       title: `Purchase: ${purRatio}% of Sale`,
       desc: `Purchase cost sale ka <strong>${purRatio}%</strong> hai. ${+purRatio>80?'Purchase cost zyada hai — margin kam ho sakta hai.':'Purchase cost reasonable range mein hai.'}`
     },
     ...(bestMonth ? [{
-      icon: 'fa-trophy', color:'var(--green)', bg:'var(--green-l)',
+      icon:'fa-trophy', color:'var(--green)', bg:'var(--green-l)',
       title: `Best Month: ${bestMonth.month}`,
       desc: `Sabse zyada profit <strong>${bestMonth.month}</strong> mein raha — <strong>${INR(Math.abs(bestMonth.netPL||0))}</strong> net P/L.`
     }] : []),
     ...(worstMonth && worstMonth.month !== (bestMonth||{}).month ? [{
-      icon: 'fa-arrow-trend-down', color:'var(--red)', bg:'var(--red-l)',
+      icon:'fa-arrow-trend-down', color:'var(--red)', bg:'var(--red-l)',
       title: `Worst Month: ${worstMonth.month}`,
-      desc: `Sabse kam performance <strong>${worstMonth.month}</strong> mein rahi — Net P/L <strong>${INR(Math.abs(worstMonth.netPL||0))}</strong> ${(worstMonth.netPL||0)<0?'loss':'profit'}.`
+      desc: `Sabse kam performance <strong>${worstMonth.month}</strong> mein — Net P/L <strong>${INR(Math.abs(worstMonth.netPL||0))}</strong> ${(worstMonth.netPL||0)<0?'loss':'profit'}.`
     }] : []),
   ];
 
   const insightCards = insights.map(ins => `
     <div class="card" style="margin-bottom:12px">
-      <div class="card-body" style="padding:16px 18px">
-        <div style="display:flex;gap:12px;align-items:flex-start">
-          <div style="width:40px;height:40px;border-radius:10px;background:${ins.bg};color:${ins.color};display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">
+      <div class="card-p">
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:42px;height:42px;border-radius:10px;background:${ins.bg};color:${ins.color};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">
             <i class="fas ${ins.icon}"></i>
           </div>
           <div>
-            <div style="font-size:13.5px;font-weight:800;color:var(--text);margin-bottom:4px">${ins.title}</div>
-            <div style="font-size:12.5px;color:var(--text2);line-height:1.5">${ins.desc}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:5px">${ins.title}</div>
+            <div style="font-size:13px;color:var(--muted);line-height:1.6">${ins.desc}</div>
           </div>
         </div>
       </div>
     </div>`).join('');
 
-  v.innerHTML = `
-  <div class="ph">
-    <div class="ph-l"><h2>Business Insights</h2><p>FY 2025–26 ke key metrics & performance analysis</p></div>
+  const netPctClamped  = Math.max(0, Math.min(100, +margin + 100));
+  const expCtrl        = Math.max(0, 100 - +expRatio);
+  const purEff         = Math.max(0, 100 - +purRatio);
+
+  v.innerHTML = _pageHd('Business Insights', 'FY 2025–26 ke key metrics & performance analysis') +
+
+  `<div class="info-box blue" style="margin-bottom:20px">
+    <i class="fas fa-lightbulb"></i>
+    <span>Yeh insights aapke actual data ke basis par automatically generate hote hain.</span>
   </div>
 
-  <div class="g-6-4">
-    <div>
-      <div class="notice info" style="margin-bottom:14px">
-        <i class="fas fa-lightbulb"></i>
-        <span>Yeh insights aapke actual data ke basis par automatically generate hote hain.</span>
-      </div>
-      ${insightCards}
-    </div>
+  <div class="g2">
+    <div>${insightCards}</div>
 
-    <div>
-      <!-- Health Score -->
-      <div class="card" style="margin-bottom:16px">
-        <div class="card-hd"><div class="card-title"><i class="fas fa-heartbeat"></i> Business Health</div></div>
-        <div class="card-body no-top">
-          ${_healthBar('Net Margin', Math.max(0,Math.min(100,+margin)), +margin>=10?'var(--green)':+margin>=0?'var(--amber)':'var(--red)')}
-          ${_healthBar('Expense Control', Math.max(0,100-+expRatio), +expRatio<20?'var(--green)':+expRatio<40?'var(--amber)':'var(--red)')}
-          ${_healthBar('Purchase Efficiency', Math.max(0,100-+purRatio), +purRatio<60?'var(--green)':+purRatio<80?'var(--amber)':'var(--red)')}
-        </div>
-      </div>
-
-      <!-- Key Ratios -->
+    <div style="display:flex;flex-direction:column;gap:16px">
       <div class="card">
-        <div class="card-hd"><div class="card-title"><i class="fas fa-calculator"></i> Key Ratios</div></div>
-        <div class="card-body no-top">
-          <div class="stat-strip">
-            ${_ssRow('Gross Margin %', (s.totalSale?((s.grossPL/s.totalSale)*100).toFixed(1):0)+'%','var(--text)')}
-            ${_ssRow('Net Margin %', margin+'%', +margin>=0?'var(--green)':'var(--red)')}
-            ${_ssRow('Expense %', expRatio+'%','var(--amber)')}
-            ${_ssRow('Purchase %', purRatio+'%','var(--brand)')}
-            ${_ssRow('Total Entries', (DB.stats.purchaseCount||0)+(DB.stats.saleCount||0),'var(--text)')}
-          </div>
+        <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+          <span style="font-size:14px;font-weight:700"><i class="fas fa-heartbeat" style="color:var(--red);margin-right:8px"></i>Business Health</span>
+        </div>
+        <div class="card-p">
+          ${_healthBar('Net Margin', Math.max(0,Math.min(100,+margin+50)), +margin>=10?'var(--green)':+margin>=0?'var(--amber)':'var(--red)')}
+          ${_healthBar('Expense Control', expCtrl, +expRatio<20?'var(--green)':+expRatio<40?'var(--amber)':'var(--red)')}
+          ${_healthBar('Purchase Efficiency', purEff, +purRatio<60?'var(--green)':+purRatio<80?'var(--amber)':'var(--red)')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+          <span style="font-size:14px;font-weight:700"><i class="fas fa-calculator" style="color:var(--red);margin-right:8px"></i>Key Ratios</span>
+        </div>
+        <div class="card-p">
+          ${_kv('Gross Margin %', (s.totalSale?((s.grossPL/s.totalSale)*100).toFixed(1):0)+'%', 'var(--text)')}
+          ${_kv('Net Margin %', margin+'%', +margin>=0?'var(--green)':'var(--red)')}
+          ${_kv('Expense %', expRatio+'%', 'var(--amber)')}
+          ${_kv('Purchase %', purRatio+'%', 'var(--red)')}
+          ${_kv('Total Entries', ((DB.stats.purchaseCount||0)+(DB.stats.saleCount||0))+' entries', 'var(--text)')}
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Trend chart -->
-  <div class="card">
-    <div class="card-hd"><div class="card-title"><i class="fas fa-chart-area"></i> Purchase vs Sale vs Net P/L (6M Trend)</div></div>
-    <div class="card-body">
-      <div class="chart-box" style="height:260px"><canvas id="ch-insights"></canvas></div>
+  <div class="card" style="margin-top:20px">
+    <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
+      <span style="font-size:14px;font-weight:700"><i class="fas fa-chart-area" style="color:var(--blue);margin-right:8px"></i>Purchase vs Sale vs Net P/L Trend</span>
     </div>
+    <div class="card-p"><div style="height:260px;position:relative"><canvas id="ch-insights"></canvas></div></div>
   </div>`;
 
   requestAnimationFrame(() => {
     const c = DB.chart || {};
     if (c.labels && c.labels.length) {
       _drawChart('ch-insights','bar',c.labels,[
-        { label:'Purchase', data:c.purchase||[], backgroundColor:'rgba(192,57,43,.6)', borderRadius:4 },
-        { label:'Sale',     data:c.sale||[],     backgroundColor:'rgba(39,174,96,.6)',  borderRadius:4 },
-        { label:'Net P/L',  data:c.net||[],      type:'line', borderColor:'#2980B9', backgroundColor:'rgba(41,128,185,.1)', pointRadius:4, tension:.4, fill:true, yAxisID:'y1' },
+        { label:'Purchase', data:c.purchase||[], backgroundColor:'rgba(234,67,53,.6)', borderRadius:4 },
+        { label:'Sale',     data:c.sale||[],     backgroundColor:'rgba(52,168,83,.6)',  borderRadius:4 },
+        { label:'Net P/L',  data:c.net||[],      type:'line', borderColor:'#4285F4', backgroundColor:'rgba(66,133,244,.1)', pointRadius:4, tension:.4, fill:true, yAxisID:'y1' },
       ], true, false, true);
     }
   });
 }
 
 function _healthBar(label, pct, color) {
-  return `<div style="margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px">
-      <span>${label}</span><span style="color:${color}">${Math.round(pct)}%</span>
-    </div>
-    <div style="height:7px;background:var(--border);border-radius:7px;overflow:hidden">
-      <div style="height:100%;width:${pct}%;background:${color};border-radius:7px;transition:width .8s ease"></div>
-    </div>
+  return `<div class="health-bar-wrap">
+    <div class="health-bar-lbl"><span>${label}</span><span style="color:${color}">${Math.round(pct)}%</span></div>
+    <div class="health-bar-track"><div class="health-bar-fill" style="width:${pct}%;background:${color}"></div></div>
   </div>`;
 }
 
@@ -1273,8 +1175,8 @@ function _drawTrend() {
   const c = DB.chart || {};
   if (!c.labels || !c.labels.length) return;
   _drawChart('ch-trend', 'bar', c.labels, [
-    { label:'Purchase', data:c.purchase||[], backgroundColor:'rgba(192,57,43,.75)', borderRadius:5, borderSkipped:false },
-    { label:'Sale',     data:c.sale||[],     backgroundColor:'rgba(39,174,96,.75)',  borderRadius:5, borderSkipped:false },
+    { label:'Purchase', data:c.purchase||[], backgroundColor:'rgba(234,67,53,.75)', borderRadius:5, borderSkipped:false },
+    { label:'Sale',     data:c.sale||[],     backgroundColor:'rgba(52,168,83,.75)',  borderRadius:5, borderSkipped:false },
   ], true, false);
 }
 
@@ -1340,8 +1242,7 @@ function savePurchaseEntry() {
   const date = document.getElementById('pur-date').value;
   const qty  = document.getElementById('pur-qty').value;
   const amt  = document.getElementById('pur-amt').value;
-  if (!date)           { toast('Date select karein','warning'); return; }
-  if (!qty || +qty<=0) { toast('Qty daalna zaroori hai','warning'); return; }
+  if (!date)  { toast('Date select karein','warning'); return; }
   if (!amt || +amt<=0) { toast('Amount daalna zaroori hai','warning'); return; }
   if (!_startBtn('pur-save')) return;
 
@@ -1363,8 +1264,7 @@ function saveSaleEntry() {
   const party = document.getElementById('sal-party').value;
   const qty   = document.getElementById('sal-qty').value;
   const amt   = document.getElementById('sal-amt').value;
-  if (!date)           { toast('Date select karein','warning'); return; }
-  if (!qty || +qty<=0) { toast('Qty daalna zaroori hai','warning'); return; }
+  if (!date)  { toast('Date select karein','warning'); return; }
   if (!amt || +amt<=0) { toast('Amount daalna zaroori hai','warning'); return; }
   if (!_startBtn('sal-save')) return;
 
@@ -1494,7 +1394,7 @@ function renderPurchaseChart() {
     _drawChart('ch-pur-trend', 'bar', labels, [{
       label: 'Purchase Amount',
       data,
-      backgroundColor: 'rgba(192,57,43,.75)',
+      backgroundColor: 'rgba(234,67,53,.75)',
       borderRadius: 5,
       borderSkipped: false
     }], false, false);
@@ -1708,7 +1608,7 @@ function toggleDark() {
     #topbar.scrolled { box-shadow:0 2px 12px rgba(0,0,0,.1); }
 
     /* Card hover effect */
-    .kcard { cursor:default; user-select:none; }
+    .stat-card { cursor:default; user-select:none; }
 
     /* Loading shimmer for tables */
     .tbl-skeleton td { padding:10px 14px; }
