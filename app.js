@@ -89,36 +89,34 @@ function _api(action, data, ok, err) {
 ───────────────────────────────────────────────────────── */
 // lg-year is set in window.load handler safely
 
-function togglePw() {
-  const inp = document.getElementById('lg-pass');
-  const ico = document.getElementById('eye-ico');
+function toggleEye(btn) {
+  const inp = document.getElementById('f-pass');
   const show = inp.type === 'password';
   inp.type = show ? 'text' : 'password';
-  ico.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
+  const ico = btn ? btn.querySelector('i') : null;
+  if (ico) ico.className = show ? 'fas fa-eye-slash' : 'fas fa-eye';
 }
 
 function showLgErr(msg) {
-  const el = document.getElementById('lg-err');
-  document.getElementById('lg-err-txt').textContent = msg;
-  el.classList.add('on');
+  const el = document.getElementById('eb');
+  document.getElementById('eb-txt').textContent = msg;
+  el.classList.add('active');
 }
-function hideLgErr() { document.getElementById('lg-err').classList.remove('on'); }
+function hideLgErr() { document.getElementById('eb').classList.remove('show'); }
 
 function doLogin() {
   hideLgErr();
-  const email = document.getElementById('lg-email').value.trim().toLowerCase();
-  const pass  = document.getElementById('lg-pass').value.trim();
+  const email = document.getElementById('f-email').value.trim().toLowerCase();
+  const pass  = document.getElementById('f-pass').value.trim();
   if (!email) { showLgErr('Email address daalna zaroori hai.'); return; }
   if (!pass)  { showLgErr('Password daalna zaroori hai.'); return; }
 
-  const btn = document.getElementById('lg-btn');
+  const btn = document.getElementById('login-btn');
   btn.classList.add('busy');
-  btn.innerHTML = 'Signing in…';
 
   _api('login', { email, password: pass },
     res => {
       btn.classList.remove('busy');
-      btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
       if (res && res.success) {
         USER   = res.user;
         _TOKEN = res.token;
@@ -131,7 +129,6 @@ function doLogin() {
     },
     e => {
       btn.classList.remove('busy');
-      btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
       showLgErr('Connection error: ' + (e.message || 'Network error'));
     }
   );
@@ -140,17 +137,17 @@ function doLogin() {
 function showWelcomeCard(u) {
   const parts = (u.name||'FR').trim().split(/\s+/);
   const ini = (parts.length >= 2 ? parts[0][0] + parts[parts.length-1][0] : parts[0].slice(0,2)).toUpperCase();
-  document.getElementById('wc-av').textContent   = ini;
-  document.getElementById('wc-name').textContent  = u.name;
-  document.getElementById('wc-dept').textContent  = (u.dept||'DEPARTMENT').toUpperCase() + ' DEPARTMENT';
-  document.getElementById('wc-email').textContent = u.email;
-  document.getElementById('lg-form').style.display   = 'none';
-  document.getElementById('wc-wrap').style.display   = 'block';
+  document.getElementById('wav').textContent   = ini;
+  document.getElementById('wn').textContent  = u.name;
+  document.getElementById('wd-dept').textContent  = (u.dept||'DEPARTMENT').toUpperCase() + ' DEPARTMENT';
+  document.getElementById('we').textContent = u.email;
+  document.getElementById('form-area').style.display   = 'none';
+  document.getElementById('wc').style.display   = 'block';
 }
 
 function enterApp() {
   document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').classList.add('on');
+  document.getElementById('app').classList.add('active');
   _initApp();
 }
 
@@ -161,7 +158,7 @@ function enterApp() {
 ───────────────────────────────────────────────────────── */
 function _initApp() {
   document.getElementById('fy').textContent = new Date().getFullYear();
-  document.getElementById('tb-date-chip').textContent = new Date().toLocaleDateString('en-IN', {
+  const tdEl = document.getElementById('tb-date'); if(tdEl) tdEl.textContent = new Date().toLocaleDateString('en-IN', {
     weekday:'short', day:'numeric', month:'short', year:'numeric'
   });
   _setUserUI();
@@ -175,7 +172,7 @@ function _setUserUI() {
   const name = USER.name || 'User';
   const parts = name.trim().split(/\s+/);
   const ini = (parts.length >= 2 ? parts[0][0] + parts[parts.length-1][0] : parts[0].slice(0,2)).toUpperCase();
-  const av = document.getElementById('sb-av'); if(av) av.textContent = ini;
+  const av = document.getElementById('sb-avatar'); if(av) av.textContent = ini;
   const un = document.getElementById('sb-uname'); if(un) un.textContent = name;
   const rl = document.getElementById('sb-role'); if(rl) rl.textContent = (USER.role||'USER').toUpperCase();
 }
@@ -208,6 +205,8 @@ function _loadData(firstLoad, cb) {
       if (firstLoad) {
         UI.pollerTimer = setInterval(_silentPoll, 30000);
       }
+      // Hide loader on first data load
+      const ldr = document.getElementById('loader'); if(ldr) ldr.style.display = 'none';
       if (cb) cb();
       else _rerender();
     },
@@ -263,20 +262,20 @@ const VIEW_META = {
 
 function goTo(v, rerender) {
   // close mobile sidebar
-  if (window.innerWidth <= 900) closeSidebar();
+  if (window.innerWidth <= 768) closeSidebar();
 
   // update active view
-  document.querySelectorAll('.view').forEach(el => el.classList.remove('on'));
-  const vel = document.getElementById('v-' + v); if (vel) vel.classList.add('on');
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  const vel = document.getElementById('v-' + v); if (vel) vel.classList.add('active');
 
   // update nav highlight
-  document.querySelectorAll('.sb-item').forEach(el => el.classList.remove('on'));
-  const nel = document.getElementById('n-' + v); if (nel) nel.classList.add('on');
+  document.querySelectorAll('.sb-nav-item').forEach(el => el.classList.remove('active'));
+  const nel = document.getElementById('n-' + v); if (nel) nel.classList.add('active');
 
   // update topbar
   const meta = VIEW_META[v] || {};
-  document.getElementById('tb-title').textContent = meta.title || v;
-  document.getElementById('tb-breadcrumb').textContent = 'Fresko P&L Tracker · ' + (meta.crumb || '');
+  const tbTitle = document.getElementById('tb-title'); if(tbTitle) tbTitle.textContent = meta.title || v;
+  const tbSub = document.getElementById('tb-sub'); if(tbSub) tbSub.textContent = meta.crumb || 'Fresko P&L Tracker';
 
   const addBtn = document.getElementById('tb-add-btn');
   const addLbl = document.getElementById('tb-add-lbl');
@@ -312,7 +311,7 @@ function openAddModal() {
    SIDEBAR TOGGLE
 ───────────────────────────────────────────────────────── */
 function toggleSidebar() {
-  if (window.innerWidth <= 900) { openSidebar(); return; }
+  if (window.innerWidth <= 768) { openSidebar(); return; }
   UI.sbCollapsed = !UI.sbCollapsed;
   const sb = document.getElementById('sb');
   sb.classList.toggle('collapsed', UI.sbCollapsed);
@@ -321,11 +320,11 @@ function toggleSidebar() {
 }
 function openSidebar() {
   document.getElementById('sb').classList.add('mobile-open');
-  document.getElementById('sb-overlay').classList.add('on');
+  document.getElementById('sb-backdrop').classList.add('active');
 }
 function closeSidebar() {
   document.getElementById('sb').classList.remove('mobile-open');
-  document.getElementById('sb-overlay').classList.remove('on');
+  document.getElementById('sb-backdrop').classList.remove('show');
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -482,7 +481,7 @@ function _miniSaleTable(arr) {
   if (!arr.length) return `<div class="tbl-empty"><i class="fas fa-inbox"></i><p>Koi sale entry nahi</p></div>`;
   let h = `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Party</th><th>Amount</th></tr></thead><tbody>`;
   arr.forEach(r => {
-    const cls = String(r.party||'').includes('LOCAL') ? 'b-brand' : 'b-green';
+    const cls = String(r.party||'').includes('LOCAL') ? 'b-red' : 'b-green';
     h += `<tr><td>${fmtD(r.date)}</td><td><span class="badge ${cls}">${r.party||'—'}</span></td><td class="mono">₹${fmt(r.amount)}</td></tr>`;
   });
   return h + `</tbody></table></div>`;
@@ -724,7 +723,7 @@ function renderSales() {
 
   let tblH = '';
   rows.forEach((r, i) => {
-    const cls = String(r.party||'').includes('LOCAL') ? 'b-brand' : 'b-green';
+    const cls = String(r.party||'').includes('LOCAL') ? 'b-red' : 'b-green';
     tblH += `<tr>
       <td style="color:var(--sub);font-size:11px">${(page-1)*PER+i+1}</td>
       <td><strong>${fmtD(r.date)}</strong></td>
@@ -1310,9 +1309,9 @@ function openModal(id) {
     document.getElementById('exp-amt').value  = '';
     _populateMonths();
   }
-  document.getElementById(id).classList.add('on');
+  document.getElementById(id).classList.add('active');
 }
-function closeModal(id) { document.getElementById(id).classList.remove('on'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 /* ─────────────────────────────────────────────────────────
    UTILITIES
@@ -1353,11 +1352,11 @@ function toast(msg, type='success') {
 ───────────────────────────────────────────────────────── */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.mbackdrop.on').forEach(m => m.classList.remove('on'));
+    document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
     closeSidebar();
   }
   // Ctrl+D = Dashboard, Ctrl+P = Purchase, Ctrl+S = Sales
-  if (e.ctrlKey && e.key === 'd' && document.getElementById('app').classList.contains('on')) {
+  if (e.ctrlKey && e.key === 'd' && document.getElementById('app-wrapper').style.display === 'block') {
     e.preventDefault(); goTo('dashboard');
   }
 });
@@ -1467,7 +1466,7 @@ function showShortcuts() {
    RIPPLE EFFECT ON BUTTONS
 ───────────────────────────────────────────────────────── */
 document.addEventListener('click', function(e) {
-  const btn = e.target.closest('.btn, .sb-item, .kcard');
+  const btn = e.target.closest('.btn, .sb-nav-item, .stat-card');
   if (!btn) return;
   const circle = document.createElement('span');
   const diameter = Math.max(btn.clientWidth, btn.clientHeight);
@@ -1540,7 +1539,7 @@ let _dark = false;
 function toggleDark() {
   _dark = !_dark;
   const root = document.documentElement;
-  const ico  = document.getElementById('dark-ico');
+  const ico  = document.getElementById('dark-ico') || {className:''};
   if (_dark) {
     root.style.setProperty('--bg',    '#0F1117');
     root.style.setProperty('--bg2',   '#1A1D2E');
@@ -1580,15 +1579,12 @@ function toggleDark() {
     .swal2-cancel  { border-radius:9px !important; font-weight:700 !important; }
     .swal2-toast   { border-radius:12px !important; }
 
-    /* Smooth page transitions */
-    .view { transition: opacity .18s ease; }
-    .view:not(.on) { opacity:0; pointer-events:none; }
-    .view.on { opacity:1; }
+    /* Smooth page transitions handled by viewIn keyframe */
 
     /* Glowing active nav item */
-    .sb-item.on::before {
+    .sb-nav-item.active::before {
       content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
-      background:linear-gradient(180deg,#E74C3C,#C0392B);
+      background:linear-gradient(180deg,#EA4335,#C5221F);
       border-radius:0 3px 3px 0;
     }
 
@@ -1655,10 +1651,10 @@ document.addEventListener('DOMContentLoaded', () => {
 ───────────────────────────────────────────────────────── */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.mbackdrop.on').forEach(m => m.classList.remove('on'));
+    document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
     closeSidebar();
   }
-  if (!document.getElementById('app').classList.contains('on')) return;
+  if (!document.getElementById('app-wrapper').style.display === 'block') return;
   if (e.ctrlKey && e.key === 'd') { e.preventDefault(); goTo('dashboard'); }
   if (e.ctrlKey && e.key === 'p') { e.preventDefault(); openModal('m-pur'); }
   if (e.ctrlKey && e.key === 'k') { e.preventDefault(); openModal('m-sal'); }
@@ -1682,9 +1678,9 @@ window.addEventListener('load', () => {
   });
 
   // Dismiss modal on backdrop click
-  document.querySelectorAll('.mbackdrop').forEach(el => {
+  document.querySelectorAll('.modal-overlay').forEach(el => {
     el.addEventListener('click', function(e) {
-      if (e.target === this) this.classList.remove('on');
+      if (e.target === this) this.classList.remove('show');
     });
   });
 
@@ -1692,6 +1688,10 @@ window.addEventListener('load', () => {
   if (USER && _TOKEN) {
     enterApp();
   }
+  // Backdrop close on modal click
+  document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
+  });
 });
 
 /* ─────────────────────────────────────────────────────────
