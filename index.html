@@ -613,6 +613,104 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
+
+    /* ── LOADER must show flex ── */
+    #loader { display: flex; }
+
+    /* ── VIEWS: section tags need same treatment as div ── */
+    section.view { display: none; }
+    section.view.active { display: block; animation: viewIn .25s ease both; }
+
+    /* ── TABLE must have tbl class styling ── */
+    table.tbl th { position: sticky; top: 0; z-index: 2; }
+
+    /* ── SEARCH input left icon padding ── */
+    .search-wrap input.form-input { padding-left: 32px; }
+
+    /* ── btn-amber ── */
+    .btn-amber { background: var(--amber); color: #fff; border-color: var(--amber); }
+    .btn-amber:hover { background: var(--amber-d); }
+
+    /* ── btn-green ── */  
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-green:hover { background: var(--green-d); }
+
+    /* ── stat-card watermark icon ── */
+    .stat-card .sc-icon {
+      position: absolute; right: 15px; bottom: 10px;
+      font-size: 48px; opacity: .06; transform: rotate(-10deg);
+      pointer-events: none;
+    }
+
+    /* ── PAGER ── */
+    .pager { display:flex;align-items:center;justify-content:space-between;
+      padding:12px 16px;border-top:1px solid var(--border);
+      background:#F8FAFC;border-radius:0 0 var(--radius) var(--radius); }
+    .pager-info { font-size:12px;color:var(--muted);font-weight:500; }
+    .pager-btns { display:flex;gap:6px;align-items:center; }
+    .pager-btn {
+      width:32px;height:32px;border-radius:8px;border:1.5px solid var(--border);
+      background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      color:var(--muted);transition:all .2s;font-size:12px;
+    }
+    .pager-btn:hover:not(:disabled) { border-color:var(--red);color:var(--red);background:var(--red-l); }
+    .pager-btn:disabled { opacity:.3;cursor:not-allowed; }
+    .pager-page { font-size:12px;font-weight:700;color:var(--text);padding:0 10px; }
+
+    /* ── KV ROW (key-value) ── */
+    .kv-row { display:flex;align-items:center;justify-content:space-between;
+      padding:10px 0;border-bottom:1px solid var(--border); }
+    .kv-row:last-child { border-bottom:none; }
+    .kv-lbl { font-size:12px;font-weight:600;color:var(--muted); }
+    .kv-val { font-size:13.5px;font-weight:800; }
+
+    /* ── INFO BOX ── */
+    .info-box { border-radius:8px;padding:10px 14px;font-size:12px;
+      display:flex;gap:8px;align-items:flex-start;margin-bottom:12px; }
+    .info-box.blue { background:#E8F0FE;border:1px solid #BFDBFE;color:#1967D2; }
+    .info-box.amber { background:var(--amber-l);border:1px solid #FDD663;color:#EA8600; }
+    .info-box.green { background:var(--green-l);border:1px solid #A8DAB5;color:#137333; }
+    .info-box i { margin-top:1px;flex-shrink:0; }
+
+    /* ── HEALTH BAR ── */
+    .health-bar-wrap { margin-bottom:14px; }
+    .health-bar-lbl { display:flex;justify-content:space-between;
+      font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px; }
+    .health-bar-track { height:7px;background:var(--border);border-radius:7px;overflow:hidden; }
+    .health-bar-fill { height:100%;border-radius:7px;transition:width .8s ease; }
+
+    /* ── SUMMARY TABLE ROWS ── */
+    .cur-month td { background:var(--amber-l) !important; }
+    .total-row td { background:#F8FAFC !important;font-weight:800;border-top:2px solid var(--border); }
+
+    /* ── CARD TOP ICON (watermark) ── */
+    .stat-card { overflow: hidden; }
+
+    /* ── PROFIT / LOSS ── */
+    .profit { color: var(--green) !important; font-weight: 700; }
+    .loss   { color: var(--red)   !important; font-weight: 700; }
+
+    /* ── TABLE num ── */
+    table.tbl td.num { text-align:right;font-weight:600;font-variant-numeric:tabular-nums; }
+
+    /* ── CARD-P consistent padding ── */
+    .card-p { padding: 16px 20px; }
+
+    /* ── SPINNING ── */
+    #refresh-icon.spinning { animation: spin .7s linear infinite; }
+
+    /* ── BUSY btn ── */
+    .btn.busy { opacity:.65;pointer-events:none; }
+    .btn.busy::after { content:''; display:inline-block;width:14px;height:14px;
+      border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
+      border-radius:50%;animation:spin .7s linear infinite;margin-left:8px; }
+
+    /* ── PRINT ── */
+    @media print {
+      #sb, #topbar { display:none !important; }
+      #content { padding:0; }
+      .card { box-shadow:none;break-inside:avoid; }
+    }
   </style>
 </head>
 <body>
@@ -772,7 +870,7 @@
 
       <div id="content" class="scroll">
         <!-- Loader -->
-        <div id="loader">
+        <div id="loader" style="display:flex">
           <div class="spin-ring"></div>
           <div class="loader-text">Loading P&amp;L data…</div>
         </div>
