@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Fresko — P&L Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="theme-color" content="#C0392B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Fresko P&L">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+/* ════════════════════════════════════════════════════════
+   DESIGN TOKENS — Fresko Red Theme
+════════════════════════════════════════════════════════ */
+:root {
+  /* Brand */
+  --brand:       #C0392B;
+  --brand-d:     #96281B;
+  --brand-dd:    #7B241C;
+  --brand-l:     #FDEDEC;
+  --brand-ll:    #FEF5F4;
+  --brand-mid:   rgba(192,57,43,.15);
+  --brand-glow:  rgba(192,57,43,.25);
+
+  /* Semantic */
+  --green:       #27AE60;
+  --green-l:     #E9F7EF;
+  --green-d:     #1E8449;
+  --red:         #E74C3C;
+  --red-l:       #FDEDEC;
+  --amber:       #E67E22;
+  --amber-l:     #FEF5E7;
+  --amber-d:     #BA6A1B;
+  --blue:        #2980B9;
+  --blue-l:      #EBF5FB;
+  --purple:      #8E44AD;
+  --purple-l:    #F5EEF8;
+
+  /* Neutrals */
+  --bg:          #F5F6FA;
+  --bg2:         #ECEEF5;
+  --white:       #FFFFFF;
+  --border:      #E8EAEF;
+  --border-d:    #D5D8E0;
+  --text:        #1A1D2E;
+  --text2:       #4A5066;
+  --muted:       #7A7F99;
+  --sub:         #A8ADBE;
+
+  /* Sidebar */
+  --sb-bg:       #1A0A09;
+  --sb-bg2:      #240D0C;
+  --sb-border:   rgba(255,255,255,.06);
+  --sb-text:     #C4B5B4;
+  --sb-muted:    #7A5E5D;
+  --sb-active:   linear-gradient(90deg, rgba(192,57,43,.85), rgba(150,40,27,.7));
+
+  /* Layout */
+  --sb-w:        264px;
+  --sb-w-col:    64px;
+  --topbar-h:    58px;
+  --radius:      12px;
+  --radius-lg:   18px;
+  --radius-xl:   24px;
+
+  /* Shadows */
+  --sh-xs:  0 1px 2px rgba(0,0,0,.06);
+  --sh-sm:  0 1px 3px rgba(0,0,0,.1), 0 1px 2px rgba(0,0,0,.06);
+  --sh-md:  0 4px 6px -1px rgba(0,0,0,.1), 0 2px 4px rgba(0,0,0,.06);
+  --sh-lg:  0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px rgba(0,0,0,.05);
+  --sh-xl:  0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px rgba(0,0,0,.04);
+  --sh-brand: 0 4px 20px rgba(192,57,43,.35);
+}
+
+/* ── RESET & BASE ──────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font-family: inherit; }
+img { max-width: 100%; }
+
+/* ── SCROLLBAR ──────────────────────────────────────────── */
+.scr::-webkit-scrollbar { width: 4px; height: 4px; }
+.scr::-webkit-scrollbar-track { background: transparent; }
+.scr::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+.scr::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* ── ANIMATION KEYFRAMES ───────────────────────────────── */
+@keyframes spin      { to { transform: rotate(360deg); } }
+@keyframes fadeIn    { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes slideInL  { from { transform:translateX(-20px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+@keyframes slideInR  { from { transform:translateX(20px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+@keyframes scaleIn   { from { opacity:0; transform:scale(.94); } to { opacity:1; transform:scale(1); } }
+@keyframes pulse     { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+@keyframes shimmer   { 0%{background-position:-200% 0;} 100%{background-position:200% 0;} }
+@keyframes bounceIn  { 0%{transform:scale(.8);opacity:0;} 60%{transform:scale(1.05);opacity:1;} 100%{transform:scale(1);} }
+
+/* ── LOGIN SCREEN ──────────────────────────────────────── */
+#login-screen {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #F0F2F8;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+  background-image:
+    radial-gradient(circle at 20% 50%, rgba(192,57,43,.06) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(192,57,43,.04) 0%, transparent 50%);
+}
+
+/* Grid pattern background */
+#login-screen::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: .5;
+}
+
+.login-card {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--sh-xl), 0 0 0 1px var(--border);
+  width: 100%; max-width: 420px;
+  padding: 0;
+  overflow: hidden;
+  position: relative; z-index: 1;
+  animation: scaleIn .35s cubic-bezier(.34,1.56,.64,1);
+}
+
+/* Red top accent bar */
+.login-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-d), var(--brand));
+}
+
+.login-card-inner { padding: 36px 36px 30px; }
+
+/* Logo area */
+.login-logo-wrap {
+  display: flex; flex-direction: column; align-items: center;
+  margin-bottom: 28px; text-align: center;
+}
+.login-logo-img-box {
+  width: 90px; height: 60px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 14px;
+}
+.login-logo-img-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.login-brand-name {
+  font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -.3px;
+}
+.login-brand-name span { color: var(--brand); }
+.login-brand-sub { font-size: 12px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+.login-brand-tagline { font-size: 11.5px; color: var(--sub); margin-top: 2px; }
+
+/* Form fields */
+.lg-field { margin-bottom: 16px; }
+.lg-label {
+  display: block; font-size: 11px; font-weight: 700;
+  color: var(--text2); letter-spacing: .5px; text-transform: uppercase;
+  margin-bottom: 7px;
+}
+.lg-inp-wrap { position: relative; }
+.lg-inp-ico {
+  position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
+  color: var(--sub); font-size: 13px; pointer-events: none;
+}
+.lg-inp {
+  width: 100%; padding: 11px 13px 11px 38px;
+  border: 1.5px solid var(--border-d);
+  border-radius: 10px;
+  font-size: 13.5px; color: var(--text);
+  background: var(--bg);
+  transition: border .2s, box-shadow .2s, background .2s;
+  outline: none;
+}
+.lg-inp:focus {
+  border-color: var(--brand);
+  background: var(--white);
+  box-shadow: 0 0 0 3px var(--brand-mid);
+}
+.lg-inp::placeholder { color: var(--sub); }
+.lg-eye {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: var(--sub); font-size: 13px; padding: 4px; border-radius: 4px;
+  transition: color .2s;
+}
+.lg-eye:hover { color: var(--text2); }
+
+/* Login error */
+.lg-err {
+  display: none; align-items: center; gap: 8px;
+  background: var(--red-l); border: 1px solid #F5C6C2;
+  border-radius: 9px; padding: 10px 13px;
+  font-size: 12.5px; color: var(--brand); font-weight: 500;
+  margin-bottom: 14px; animation: fadeIn .2s ease;
+}
+.lg-err.on { display: flex; }
+
+/* Sign in button */
+.lg-btn {
+  width: 100%; padding: 12px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-d));
+  color: #fff; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: var(--sh-brand);
+  transition: all .2s; letter-spacing: .2px;
+  position: relative; overflow: hidden;
+}
+.lg-btn::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(rgba(255,255,255,.1), transparent);
+}
+.lg-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 24px var(--brand-glow); }
+.lg-btn:active { transform: translateY(0); }
+.lg-btn.busy { opacity: .75; pointer-events: none; }
+.lg-btn.busy::before {
+  content: ''; width: 16px; height: 16px;
+  border: 2.5px solid rgba(255,255,255,.4); border-top-color: #fff;
+  border-radius: 50%; animation: spin .7s linear infinite;
+  margin-right: 8px;
+}
+
+.lg-footer {
+  text-align: center; font-size: 11.5px;
+  color: var(--sub); margin-top: 22px; padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.lg-footer a { color: var(--brand); font-weight: 600; }
+
+/* Welcome card (post-login) */
+.wc-wrap { text-align: center; padding: 8px 0 4px; animation: bounceIn .4s ease; }
+.wc-avatar {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand), var(--brand-d));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 800; color: #fff;
+  margin: 0 auto 14px;
+  box-shadow: var(--sh-brand);
+  border: 3px solid var(--white);
+  outline: 3px solid var(--brand-l);
+}
+.wc-name { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 3px; }
+.wc-dept {
+  font-size: 11px; font-weight: 700; color: var(--brand);
+  letter-spacing: .8px; text-transform: uppercase; margin-bottom: 3px;
+}
+.wc-email { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.wc-msg { font-size: 13px; color: var(--text2); margin: 12px 0 4px; line-height: 1.5; }
+.wc-msg strong { color: var(--brand); }
+.wc-enter {
+  width: 100%; padding: 12px; margin-top: 18px;
+  background: linear-gradient(135deg, var(--brand), var(--brand-d));
+  color: #fff; border: none; border-radius: 10px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: var(--sh-brand);
+  transition: all .2s;
+}
+.wc-enter:hover { transform: translateY(-1px); }
+
+/* ── APP SHELL ──────────────────────────────────────────── */
+#app {
+  display: none; height: 100vh; overflow: hidden;
+  flex-direction: column;
+}
+#app.on { display: flex; }
+#shell { display: flex; flex: 1; overflow: hidden; }
+
+/* ── SIDEBAR ────────────────────────────────────────────── */
+#sb {
+  width: var(--sb-w);
+  background: var(--sb-bg);
+  color: var(--sb-text);
+  display: flex; flex-direction: column;
+  height: 100vh; flex-shrink: 0;
+  transition: width .3s cubic-bezier(.4,0,.2,1), transform .3s cubic-bezier(.4,0,.2,1);
+  position: relative; z-index: 100;
+  border-right: 1px solid var(--sb-border);
+  box-shadow: 4px 0 20px rgba(0,0,0,.3);
+  overflow: hidden;
+}
+#sb.collapsed { width: var(--sb-w-col); }
+#sb.collapsed .sb-text,
+#sb.collapsed .sb-section,
+#sb.collapsed .sb-badge,
+#sb.collapsed .sb-logo-text,
+#sb.collapsed .sb-user-info { display: none !important; }
+#sb.collapsed .sb-item { justify-content: center; padding: 10px 0; border-radius: 8px; }
+#sb.collapsed .sb-ico { margin: 0; }
+#sb.collapsed .sb-header { justify-content: center; padding: 0 12px; }
+#sb.collapsed .sb-logo-box { justify-content: center; }
+
+/* Sidebar header */
+.sb-header {
+  height: 56px; display: flex; align-items: center;
+  padding: 0 14px; border-bottom: 1px solid var(--sb-border);
+  background: rgba(0,0,0,.15); flex-shrink: 0; gap: 10px;
+}
+.sb-logo-box {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+}
+.sb-logo-img { height: 32px; object-fit: contain; flex-shrink: 0; }
+.sb-logo-text { min-width: 0; }
+.sb-logo-name {
+  font-size: 13px; font-weight: 800; color: #F1D5D3;
+  line-height: 1.2; white-space: nowrap;
+}
+.sb-logo-sub {
+  font-size: 10px; color: var(--sb-muted); white-space: nowrap;
+  font-weight: 500; margin-top: 1px;
+}
+.sb-toggle {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: rgba(255,255,255,.06); border: none; cursor: pointer;
+  color: var(--sb-muted); display: flex; align-items: center; justify-content: center;
+  transition: .2s; flex-shrink: 0; font-size: 12px;
+}
+.sb-toggle:hover { background: rgba(255,255,255,.12); color: var(--sb-text); }
+
+/* Nav */
+.sb-nav { flex: 1; overflow-y: auto; padding: 10px 8px; }
+.sb-section {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .9px;
+  color: var(--sb-muted); text-transform: uppercase;
+  padding: 12px 10px 5px;
+}
+.sb-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 9px;
+  cursor: pointer; transition: .18s;
+  color: var(--sb-text); margin-bottom: 2px;
+  position: relative;
+}
+.sb-item:hover { background: rgba(255,255,255,.07); color: #E8D5D4; }
+.sb-item.on {
+  background: var(--sb-active);
+  color: #fff;
+  box-shadow: 0 2px 14px rgba(192,57,43,.4);
+}
+.sb-item.on .sb-ico { color: #fff; }
+.sb-ico {
+  width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+  font-size: 13.5px; color: var(--sb-muted); flex-shrink: 0; transition: .18s;
+}
+.sb-item:hover .sb-ico { color: var(--sb-text); }
+.sb-text { font-size: 13px; font-weight: 500; flex: 1; white-space: nowrap; }
+.sb-badge {
+  font-size: 10px; font-weight: 700;
+  background: rgba(192,57,43,.25); color: #F19A93;
+  padding: 1px 7px; border-radius: 20px;
+}
+.sb-item.on .sb-badge { background: rgba(255,255,255,.25); color: #fff; }
+
+/* Sidebar footer */
+.sb-footer { padding: 12px 10px; border-top: 1px solid var(--sb-border); flex-shrink: 0; }
+.sb-user-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 10px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--sb-border);
+  cursor: pointer; transition: .2s;
+}
+.sb-user-card:hover { background: rgba(255,255,255,.09); }
+#sb-av {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--brand), var(--brand-d));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #fff; letter-spacing: .5px;
+  border: 2px solid rgba(192,57,43,.5);
+}
+.sb-user-info { min-width: 0; flex: 1; }
+#sb-uname { font-size: 12px; font-weight: 700; color: #E8D5D4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-role-pill {
+  font-size: 9.5px; font-weight: 700; padding: 1px 7px;
+  border-radius: 20px; display: inline-block; margin-top: 2px;
+  background: rgba(192,57,43,.3); color: #F19A93;
+}
+.sb-signout {
+  background: none; border: none; cursor: pointer; color: var(--sb-muted);
+  width: 28px; height: 28px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: .18s; font-size: 13px; flex-shrink: 0;
+}
+.sb-signout:hover { background: rgba(231,76,60,.2); color: #F19A93; }
+
+/* Sidebar overlay (mobile) */
+#sb-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.5); z-index: 99; backdrop-filter: blur(2px);
+}
+#sb-overlay.on { display: block; }
+
+/* ── MAIN AREA ──────────────────────────────────────────── */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* ── TOPBAR ─────────────────────────────────────────────── */
+#topbar {
+  height: var(--topbar-h); background: var(--white);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 18px; gap: 12px;
+  flex-shrink: 0; box-shadow: var(--sh-xs);
+}
+.tb-hamburger {
+  display: none; width: 36px; height: 36px; border-radius: 8px;
+  background: none; border: 1.5px solid var(--border); cursor: pointer;
+  color: var(--text2); align-items: center; justify-content: center; font-size: 14px;
+  transition: .15s; flex-shrink: 0;
+}
+.tb-hamburger:hover { background: var(--bg); }
+.tb-left { flex: 1; min-width: 0; }
+#tb-title { font-size: 15px; font-weight: 800; color: var(--text); }
+#tb-breadcrumb { font-size: 11px; color: var(--sub); margin-top: 1px; font-weight: 500; }
+.tb-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+/* Topbar buttons */
+.tb-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border-radius: 8px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  border: 1.5px solid var(--border); background: var(--white);
+  color: var(--text2); transition: .18s; white-space: nowrap;
+  font-family: inherit;
+}
+.tb-btn:hover { background: var(--bg); border-color: var(--border-d); }
+.tb-btn.brand { background: var(--brand); color: #fff; border-color: var(--brand); box-shadow: 0 2px 10px var(--brand-glow); }
+.tb-btn.brand:hover { background: var(--brand-d); }
+.tb-btn .spin-ico { animation: spin .8s linear infinite; }
+.tb-date-chip {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--border);
+  padding: 5px 10px; border-radius: 7px;
+}
+
+/* ── CONTENT ────────────────────────────────────────────── */
+#content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 18px 20px 24px; }
+
+/* ── VIEWS ──────────────────────────────────────────────── */
+.view { display: none; animation: fadeIn .25s ease; }
+.view.on { display: block; }
+
+/* ── PAGE HEADER ────────────────────────────────────────── */
+.ph {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 18px; flex-wrap: wrap; gap: 10px;
+}
+.ph-l h2 { font-size: 20px; font-weight: 800; color: var(--text); letter-spacing: -.3px; }
+.ph-l p { font-size: 12px; color: var(--muted); margin-top: 3px; font-weight: 500; }
+.ph-r { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ── KPI CARDS ──────────────────────────────────────────── */
+.krow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 18px;
+}
+.kcard {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px 18px 16px;
+  box-shadow: var(--sh-sm); position: relative; overflow: hidden;
+  transition: transform .2s, box-shadow .2s; cursor: default;
+}
+.kcard:hover { transform: translateY(-2px); box-shadow: var(--sh-md); }
+.kcard::after {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: var(--kc, var(--brand));
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+/* Large icon watermark */
+.kcard::before {
+  content: var(--ki-c, ''); font-family: 'Font Awesome 6 Free'; font-weight: 900;
+  position: absolute; right: -6px; bottom: -10px;
+  font-size: 64px; color: var(--kc, var(--brand));
+  opacity: .05; pointer-events: none; line-height: 1;
+}
+.k-ico {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; margin-bottom: 12px;
+  background: var(--kb, var(--brand-l));
+  color: var(--kc, var(--brand));
+}
+.k-val { font-size: 22px; font-weight: 900; line-height: 1.1; margin-bottom: 3px; color: var(--text); }
+.k-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; }
+.k-sub { font-size: 11px; color: var(--sub); margin-top: 6px; display: flex; align-items: center; gap: 4px; font-weight: 500; }
+.k-sub .pos { color: var(--green); }
+.k-sub .neg { color: var(--red); }
+
+/* Color variants */
+.kcard.green { --kc:var(--green); --kb:var(--green-l); }
+.kcard.amber { --kc:var(--amber); --kb:var(--amber-l); }
+.kcard.blue  { --kc:var(--blue);  --kb:var(--blue-l); }
+.kcard.purple{ --kc:var(--purple);--kb:var(--purple-l); }
+
+/* ── CARD ───────────────────────────────────────────────── */
+.card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--sh-sm);
+  margin-bottom: 16px; overflow: hidden;
+}
+.card-hd {
+  padding: 16px 18px 0;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 8px;
+}
+.card-title {
+  font-size: 13.5px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title i { color: var(--brand); font-size: 14px; }
+.card-body { padding: 16px 18px 18px; }
+.card-body.no-top { padding-top: 12px; }
+
+/* ── GRIDS ──────────────────────────────────────────────── */
+.g2    { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.g3    { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.g4    { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+.g-6-4 { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+.g-7-3 { display: grid; grid-template-columns: 7fr 3fr; gap: 16px; }
+
+/* ── TABLE ──────────────────────────────────────────────── */
+.tbl-wrap { overflow-x: auto; }
+.tbl-wrap::-webkit-scrollbar { height: 3px; }
+.tbl-wrap::-webkit-scrollbar-thumb { background: var(--border-d); border-radius: 3px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  background: #F8F9FD; border-bottom: 2px solid var(--border);
+  padding: 10px 14px; text-align: left;
+  font-size: 10.5px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+}
+thead th:first-child { border-radius: 0; }
+tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: #FDF8F8; }
+tbody td { padding: 10px 14px; vertical-align: middle; }
+.tbl-empty { text-align: center; padding: 40px 20px; color: var(--sub); }
+.tbl-empty i { font-size: 32px; opacity: .3; display: block; margin-bottom: 10px; }
+.tbl-empty p { font-size: 13px; font-weight: 500; }
+
+/* ── BADGES ─────────────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.b-brand  { background: var(--brand-l); color: var(--brand); }
+.b-green  { background: var(--green-l); color: var(--green-d); }
+.b-amber  { background: var(--amber-l); color: var(--amber-d); }
+.b-blue   { background: var(--blue-l);  color: var(--blue); }
+.b-purple { background: var(--purple-l);color: var(--purple); }
+.b-muted  { background: var(--bg2);     color: var(--muted); }
+
+/* ── PILLS (FILTER TABS) ───────────────────────────────── */
+.pill-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.pill {
+  padding: 5px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  border: 1.5px solid var(--border); background: var(--white);
+  color: var(--muted); transition: .15s; font-family: inherit;
+}
+.pill.on {
+  background: var(--brand); color: #fff;
+  border-color: var(--brand); box-shadow: 0 2px 10px var(--brand-glow);
+}
+.pill:hover:not(.on) { border-color: var(--brand); color: var(--brand); }
+
+/* ── SEARCH BAR ─────────────────────────────────────────── */
+.srch-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.srch-wrap { position: relative; flex: 1; min-width: 180px; }
+.srch-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--sub); font-size: 13px; pointer-events: none; }
+.srch-inp {
+  width: 100%; padding: 9px 12px 9px 36px;
+  border: 1.5px solid var(--border); border-radius: 9px;
+  font-size: 13px; color: var(--text); background: var(--white);
+  outline: none; transition: .2s; font-family: inherit;
+}
+.srch-inp:focus { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-mid); }
+
+/* ── FORMS ──────────────────────────────────────────────── */
+.fg { display: flex; flex-direction: column; gap: 5px; }
+.flabel { font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .4px; }
+.req { color: var(--brand); }
+.finp {
+  border: 1.5px solid var(--border-d); border-radius: 9px;
+  padding: 9px 13px; font-size: 13px; color: var(--text);
+  background: var(--bg); outline: none; transition: .2s;
+  width: 100%; font-family: inherit;
+}
+.finp:focus { border-color: var(--brand); background: var(--white); box-shadow: 0 0 0 3px var(--brand-mid); }
+.finp::placeholder { color: var(--sub); }
+.frow  { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.frow3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.frow1 { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px; }
+.fsec {
+  font-size: 10.5px; font-weight: 800; color: var(--brand);
+  text-transform: uppercase; letter-spacing: .6px;
+  border-bottom: 2px solid var(--brand-l); padding-bottom: 6px; margin-bottom: 14px;
+}
+
+/* ── BUTTONS ────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 17px; border-radius: 9px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  border: none; transition: all .18s; white-space: nowrap;
+  font-family: inherit; letter-spacing: .1px;
+}
+.btn-brand { background: var(--brand); color: #fff; box-shadow: 0 2px 10px var(--brand-glow); }
+.btn-brand:hover { background: var(--brand-d); transform: translateY(-1px); }
+.btn-green { background: var(--green); color: #fff; box-shadow: 0 2px 10px rgba(39,174,96,.3); }
+.btn-green:hover { background: var(--green-d); }
+.btn-amber { background: var(--amber); color: #fff; box-shadow: 0 2px 10px rgba(230,126,34,.3); }
+.btn-amber:hover { background: var(--amber-d); }
+.btn-blue  { background: var(--blue); color: #fff; }
+.btn-blue:hover  { background: var(--blue-d, #1a6b99); }
+.btn-ghost { background: var(--white); color: var(--text2); border: 1.5px solid var(--border); }
+.btn-ghost:hover { background: var(--bg); border-color: var(--border-d); }
+.btn-sm { padding: 6px 13px; font-size: 12px; border-radius: 7px; }
+.btn-xs { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+.btn.busy { opacity: .6; pointer-events: none; }
+.btn.busy i.chk { display: none; }
+
+/* ── DIVIDER ────────────────────────────────────────────── */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* ── INSIGHT PANELS ─────────────────────────────────────── */
+.insight-row { display: flex; flex-direction: column; gap: 10px; }
+.insight-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 13px; border-radius: 9px; background: var(--bg);
+  border: 1px solid var(--border);
+}
+.insight-lbl { font-size: 12px; font-weight: 600; color: var(--text2); }
+.insight-val { font-size: 13px; font-weight: 800; }
+.insight-bar-wrap { margin-top: 6px; height: 4px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.insight-bar { height: 100%; border-radius: 4px; transition: width .5s ease; }
+
+/* ── CHARTS ─────────────────────────────────────────────── */
+.chart-box { position: relative; }
+.chart-box canvas { width: 100% !important; }
+
+/* ── PAGER ──────────────────────────────────────────────── */
+.pager {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px 14px; font-size: 12px; color: var(--muted); font-weight: 500;
+  flex-wrap: wrap; gap: 8px;
+}
+.pager-btns { display: flex; gap: 4px; }
+.pager-btn {
+  padding: 5px 13px; border-radius: 7px; font-size: 12px; font-weight: 600;
+  background: var(--white); border: 1.5px solid var(--border);
+  cursor: pointer; transition: .15s; font-family: inherit; color: var(--text2);
+}
+.pager-btn:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); background: var(--brand-l); }
+.pager-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── MODAL ──────────────────────────────────────────────── */
+.mbackdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,10,10,.55); backdrop-filter: blur(3px);
+  z-index: 500; align-items: center; justify-content: center; padding: 16px;
+}
+.mbackdrop.on { display: flex; }
+.mbox {
+  background: var(--white); border-radius: var(--radius-lg);
+  width: 100%; max-width: 500px; max-height: 92vh;
+  display: flex; flex-direction: column;
+  box-shadow: var(--sh-xl), 0 0 0 1px rgba(0,0,0,.06);
+  animation: scaleIn .22s cubic-bezier(.34,1.56,.64,1);
+  overflow: hidden;
+}
+.mbox.lg { max-width: 640px; }
+.mhd {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mhd-title { font-size: 15px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 9px; }
+.mhd-title i { color: var(--brand); }
+.mclose {
+  width: 30px; height: 30px; border-radius: 7px;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 16px; display: flex; align-items: center; justify-content: center;
+  transition: .18s; line-height: 1;
+}
+.mclose:hover { background: var(--red-l); color: var(--red); }
+.mbody { flex: 1; overflow-y: auto; padding: 20px; }
+.mfoot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0; }
+
+/* ── SKELETON ───────────────────────────────────────────── */
+.skel {
+  background: linear-gradient(90deg, var(--bg2) 25%, var(--border) 50%, var(--bg2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite; border-radius: 6px;
+}
+.skel-h { height: 14px; margin-bottom: 8px; }
+.skel-card { height: 100px; border-radius: var(--radius); }
+
+/* ── NOTICE / ALERTS ────────────────────────────────────── */
+.notice {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 14px; border-radius: 10px;
+  font-size: 12.5px; font-weight: 500; margin-bottom: 14px;
+}
+.notice.info { background: var(--blue-l); border: 1px solid #BDD7F5; color: var(--blue); }
+.notice.success { background: var(--green-l); border: 1px solid #A9DFBF; color: var(--green-d); }
+.notice.warning { background: var(--amber-l); border: 1px solid #FABD8A; color: var(--amber-d); }
+.notice.danger  { background: var(--red-l);   border: 1px solid #F5C6C2; color: var(--brand-d); }
+
+/* ── P/L COLORS ─────────────────────────────────────────── */
+.profit { color: var(--green) !important; font-weight: 700; }
+.loss   { color: var(--red)   !important; font-weight: 700; }
+.zero   { color: var(--muted) !important; font-weight: 600; }
+.mono   { font-family: 'JetBrains Mono','Courier New',monospace; font-size: 12px; font-weight: 600; }
+
+/* ── STAT STRIP ─────────────────────────────────────────── */
+.stat-strip {
+  display: flex; flex-direction: column; gap: 10px; padding: 4px 0;
+}
+.ss-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px; border-radius: 9px; background: var(--bg);
+  border: 1px solid var(--border);
+}
+.ss-lbl { font-size: 12px; font-weight: 600; color: var(--text2); }
+.ss-val { font-size: 13.5px; font-weight: 800; }
+
+/* ── TIMELINE (recent entries) ─────────────────────────── */
+.timeline { display: flex; flex-direction: column; gap: 0; }
+.tl-item {
+  display: flex; gap: 12px; padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tl-item:last-child { border-bottom: none; }
+.tl-dot {
+  width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+.tl-meta { flex: 1; min-width: 0; }
+.tl-label { font-size: 12.5px; font-weight: 700; color: var(--text); }
+.tl-sub { font-size: 11px; color: var(--sub); margin-top: 1px; }
+.tl-amt { font-size: 13px; font-weight: 800; text-align: right; flex-shrink: 0; }
+
+/* ── FOOTER BAR ─────────────────────────────────────────── */
+#footer-bar {
+  height: 34px; background: var(--white); border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 18px; flex-shrink: 0;
+}
+.fb-left { font-size: 11px; color: var(--sub); font-weight: 500; }
+.fb-right { font-size: 11px; color: var(--sub); font-weight: 500; display: flex; align-items: center; gap: 4px; }
+.online-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+
+/* ── SUMMARY TABLE HIGHLIGHTS ───────────────────────────── */
+.cur-month-row td { background: var(--brand-ll) !important; font-weight: 700; }
+.total-row td { background: #F8F9FD !important; font-weight: 800; border-top: 2px solid var(--border-d); }
+
+/* ── PERCENTAGE BAR ─────────────────────────────────────── */
+.pct-bar { margin-top: 8px; }
+.pct-track { height: 5px; background: var(--border); border-radius: 5px; overflow: hidden; }
+.pct-fill { height: 100%; border-radius: 5px; transition: width .6s ease; }
+
+/* ── MOBILE OVERLAY for sidebar ────────────────────────── */
+@media (max-width: 900px) {
+  #sb { position: fixed; top: 0; left: 0; height: 100vh; transform: translateX(-100%); z-index: 200; }
+  #sb.mobile-open { transform: translateX(0); }
+  .tb-hamburger { display: flex; }
+  .krow { grid-template-columns: repeat(2, 1fr); }
+  .g-6-4, .g-7-3, .g2, .g3 { grid-template-columns: 1fr; }
+  .frow3 { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 600px) {
+  #content { padding: 12px 12px 20px; }
+  .krow { grid-template-columns: 1fr 1fr; }
+  .frow, .frow3 { grid-template-columns: 1fr; }
+  .mbox { max-width: 100%; border-radius: var(--radius); }
+  .ph { flex-direction: column; }
+  .tb-date-chip { display: none; }
+  .card-hd { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 400px) {
+  .krow { grid-template-columns: 1fr; }
+  .login-card-inner { padding: 28px 22px 22px; }
+}
+
+/* ── PRINT ──────────────────────────────────────────────── */
+@media print {
+  #sb, #topbar, #footer-bar, .ph-r, .pager { display: none !important; }
+  #content { padding: 0; }
+  .card { box-shadow: none; border: 1px solid #ccc; }
+}
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN SCREEN ═══════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-card-inner">
+
+      <!-- Logo -->
+      <div class="login-logo-wrap">
+        <div class="login-logo-img-box">
+          <img src="https://fresko.co.in/wp-content/uploads/2025/08/Untitled-design-21.png"
+               alt="Fresko" onerror="this.style.display='none';document.getElementById('logo-fallback').style.display='flex'">
+          <div id="logo-fallback" style="display:none;width:60px;height:60px;border-radius:14px;background:linear-gradient(135deg,var(--brand),var(--brand-d));align-items:center;justify-content:center;font-size:22px;font-weight:900;color:#fff">F</div>
+        </div>
+        <div class="login-brand-name">Fresko <span>P&L Tracker</span></div>
+        <div class="login-brand-sub">Profit & Loss Management System</div>
+        <div class="login-brand-tagline">Sign in to your account</div>
+      </div>
+
+      <!-- Error box -->
+      <div class="lg-err" id="lg-err">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="lg-err-txt"></span>
+      </div>
+
+      <!-- Form -->
+      <div id="lg-form">
+        <div class="lg-field">
+          <label class="lg-label">Email Address</label>
+          <div class="lg-inp-wrap">
+            <i class="fas fa-envelope lg-inp-ico"></i>
+            <input class="lg-inp" type="email" id="lg-email" placeholder="yourname@fresko.co.in"
+                   autocomplete="email" onkeydown="if(event.key==='Enter')doLogin()">
+          </div>
+        </div>
+        <div class="lg-field" style="margin-bottom:20px">
+          <label class="lg-label">Password</label>
+          <div class="lg-inp-wrap">
+            <i class="fas fa-lock lg-inp-ico"></i>
+            <input class="lg-inp" type="password" id="lg-pass" placeholder="Enter your password"
+                   autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="padding-right:42px">
+            <button class="lg-eye" type="button" onclick="togglePw()" id="eye-btn" tabindex="-1">
+              <i class="fas fa-eye" id="eye-ico"></i>
+            </button>
+          </div>
+        </div>
+        <button class="lg-btn" id="lg-btn" onclick="doLogin()">
+          <i class="fas fa-sign-in-alt"></i> Sign In
+        </button>
+      </div>
+
+      <!-- Welcome card (post-auth) -->
+      <div class="wc-wrap" id="wc-wrap" style="display:none">
+        <div class="wc-avatar" id="wc-av">FR</div>
+        <div class="wc-name" id="wc-name">User</div>
+        <div class="wc-dept" id="wc-dept">DEPARTMENT</div>
+        <div class="wc-email" id="wc-email">email@fresko.co.in</div>
+        <div class="wc-msg">Authenticated successfully.<br>Welcome to the <strong>Fresko P&L Tracker</strong>.</div>
+        <button class="wc-enter" onclick="enterApp()">
+          <i class="fas fa-arrow-right"></i> Enter Dashboard
+        </button>
+      </div>
+
+      <div class="lg-footer">
+        &copy; <span id="lg-year"></span> <a href="#">Fresko</a> &middot; P&L Management
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ APP SHELL ═══════════════ -->
+<div id="app">
+<div id="shell">
+
+  <!-- SIDEBAR OVERLAY (mobile) -->
+  <div id="sb-overlay" onclick="closeSidebar()"></div>
+
+  <!-- SIDEBAR -->
+  <nav id="sb">
+    <div class="sb-header">
+      <div class="sb-logo-box">
+        <img src="https://fresko.co.in/wp-content/uploads/2025/08/Untitled-design-21.png"
+             class="sb-logo-img" alt="Fresko"
+             onerror="this.style.display='none';document.getElementById('sb-logo-fb').style.display='flex'">
+        <div id="sb-logo-fb" style="display:none;width:32px;height:32px;border-radius:8px;background:var(--brand);align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff">F</div>
+        <div class="sb-logo-text">
+          <div class="sb-logo-name">Fresko P&L</div>
+          <div class="sb-logo-sub">FY 2025–26 Tracker</div>
+        </div>
+      </div>
+      <button class="sb-toggle" onclick="toggleSidebar()" id="sb-tog">
+        <i class="fas fa-chevron-left" id="sb-chev"></i>
+      </button>
+    </div>
+
+    <div class="sb-nav scr">
+      <div class="sb-section">Overview</div>
+      <div class="sb-item on" id="n-dashboard" onclick="goTo('dashboard')">
+        <div class="sb-ico"><i class="fas fa-home"></i></div>
+        <span class="sb-text">Dashboard</span>
+      </div>
+      <div class="sb-item" id="n-summary" onclick="goTo('summary')">
+        <div class="sb-ico"><i class="fas fa-chart-bar"></i></div>
+        <span class="sb-text">Annual Summary</span>
+      </div>
+
+      <div class="sb-section">Entry</div>
+      <div class="sb-item" id="n-purchase" onclick="goTo('purchase')">
+        <div class="sb-ico"><i class="fas fa-shopping-cart"></i></div>
+        <span class="sb-text">Purchase Entry</span>
+      </div>
+      <div class="sb-item" id="n-sales" onclick="goTo('sales')">
+        <div class="sb-ico"><i class="fas fa-truck"></i></div>
+        <span class="sb-text">Sales Entry</span>
+      </div>
+      <div class="sb-item" id="n-expenses" onclick="goTo('expenses')">
+        <div class="sb-ico"><i class="fas fa-file-invoice-dollar"></i></div>
+        <span class="sb-text">Expenses Entry</span>
+      </div>
+
+      <div class="sb-section">Reports</div>
+      <div class="sb-item" id="n-monthly" onclick="goTo('monthly')">
+        <div class="sb-ico"><i class="fas fa-calendar-alt"></i></div>
+        <span class="sb-text">Monthly P&L</span>
+      </div>
+      <div class="sb-item" id="n-analysis" onclick="goTo('analysis')">
+        <div class="sb-ico"><i class="fas fa-chart-pie"></i></div>
+        <span class="sb-text">Party Analysis</span>
+      </div>
+      <div class="sb-item" id="n-insights" onclick="goTo('insights')">
+        <div class="sb-ico"><i class="fas fa-lightbulb"></i></div>
+        <span class="sb-text">Insights</span>
+        <span class="sb-badge">New</span>
+      </div>
+    </div>
+
+    <div class="sb-footer">
+      <div class="sb-user-card">
+        <div id="sb-av">FR</div>
+        <div class="sb-user-info">
+          <div id="sb-uname">Loading…</div>
+          <span class="sb-role-pill" id="sb-role">USER</span>
+        </div>
+        <button class="sb-signout" onclick="signOutPrompt()" title="Sign Out">
+          <i class="fas fa-sign-out-alt"></i>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <div id="main">
+    <div id="topbar">
+      <button class="tb-hamburger" id="tb-ham" onclick="openSidebar()">
+        <i class="fas fa-bars"></i>
+      </button>
+      <div class="tb-left">
+        <div id="tb-title">Dashboard</div>
+        <div id="tb-breadcrumb">Fresko P&L Tracker · FY 2025–26</div>
+      </div>
+      <div class="tb-right">
+        <div class="tb-date-chip" id="tb-date-chip"></div>
+        <button class="tb-btn" onclick="toggleDark()" title="Toggle Dark Mode" style="padding:7px 10px">
+          <i class="fas fa-moon" id="dark-ico"></i>
+        </button>
+        <button class="tb-btn" onclick="openModal('m-shortcuts')" title="Shortcuts" style="padding:7px 10px">
+          <i class="fas fa-keyboard"></i>
+        </button>
+        <button class="tb-btn" onclick="doRefresh()" id="refresh-btn" title="Refresh">
+          <i class="fas fa-sync-alt" id="ref-ico"></i>
+        </button>
+        <button class="tb-btn brand" id="tb-add-btn" style="display:none" onclick="openAddModal()">
+          <i class="fas fa-plus"></i> <span id="tb-add-lbl">Add</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="content" class="scr">
+
+      <!-- ─── VIEW: DASHBOARD ───────────────────────── -->
+      <section class="view on" id="v-dashboard"></section>
+
+      <!-- ─── VIEW: ANNUAL SUMMARY ─────────────────── -->
+      <section class="view" id="v-summary"></section>
+
+      <!-- ─── VIEW: PURCHASE ───────────────────────── -->
+      <section class="view" id="v-purchase"></section>
+
+      <!-- ─── VIEW: SALES ──────────────────────────── -->
+      <section class="view" id="v-sales"></section>
+
+      <!-- ─── VIEW: EXPENSES ───────────────────────── -->
+      <section class="view" id="v-expenses"></section>
+
+      <!-- ─── VIEW: MONTHLY P&L ────────────────────── -->
+      <section class="view" id="v-monthly"></section>
+
+      <!-- ─── VIEW: PARTY ANALYSIS ─────────────────── -->
+      <section class="view" id="v-analysis"></section>
+
+      <!-- ─── VIEW: INSIGHTS ───────────────────────── -->
+      <section class="view" id="v-insights"></section>
+
+    </div>
+
+    <div id="footer-bar">
+      <div class="fb-left">Fresko P&L Tracker &copy; <span id="fy"></span></div>
+      <div class="fb-right"><div class="online-dot"></div><span id="last-sync-lbl">Live</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ─── PURCHASE MODAL ────────────────────────────────── -->
+<div class="mbackdrop" id="m-pur">
+  <div class="mbox">
+    <div class="mhd">
+      <div class="mhd-title"><i class="fas fa-shopping-cart"></i> New Purchase Entry</div>
+      <button class="mclose" onclick="closeModal('m-pur')">&#10005;</button>
+    </div>
+    <div class="mbody">
+      <div class="frow">
+        <div class="fg">
+          <label class="flabel">Date <span class="req">*</span></label>
+          <input class="finp" type="date" id="pur-date">
+        </div>
+        <div class="fg">
+          <label class="flabel">Total Qty Purchased <span class="req">*</span></label>
+          <input class="finp" type="number" id="pur-qty" placeholder="e.g. 530" min="0">
+        </div>
+      </div>
+      <div class="frow1">
+        <div class="fg">
+          <label class="flabel">Total Purchase Amount (₹) <span class="req">*</span></label>
+          <input class="finp" type="number" id="pur-amt" placeholder="e.g. 67890" min="0">
+        </div>
+      </div>
+      <div class="notice info">
+        <i class="fas fa-info-circle"></i>
+        <span>Entry save hone ke baad SUMMARY sheet automatically update ho jayegi.</span>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('m-pur')">Cancel</button>
+      <button class="btn btn-brand" id="pur-save" onclick="savePurchaseEntry()">
+        <i class="fas fa-save chk"></i> Save Entry
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── SALES MODAL ───────────────────────────────────── -->
+<div class="mbackdrop" id="m-sal">
+  <div class="mbox">
+    <div class="mhd">
+      <div class="mhd-title"><i class="fas fa-truck"></i> New Sales Entry</div>
+      <button class="mclose" onclick="closeModal('m-sal')">&#10005;</button>
+    </div>
+    <div class="mbody">
+      <div class="frow3">
+        <div class="fg">
+          <label class="flabel">Date <span class="req">*</span></label>
+          <input class="finp" type="date" id="sal-date">
+        </div>
+        <div class="fg">
+          <label class="flabel">Party Type <span class="req">*</span></label>
+          <select class="finp" id="sal-party">
+            <option value="LOCAL SALE">LOCAL SALE</option>
+            <option value="SUPPLY SALE">SUPPLY SALE</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Qty Sent <span class="req">*</span></label>
+          <input class="finp" type="number" id="sal-qty" placeholder="e.g. 850" min="0">
+        </div>
+      </div>
+      <div class="frow1">
+        <div class="fg">
+          <label class="flabel">Total Sales Amount (₹) <span class="req">*</span></label>
+          <input class="finp" type="number" id="sal-amt" placeholder="e.g. 50400" min="0">
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('m-sal')">Cancel</button>
+      <button class="btn btn-green" id="sal-save" onclick="saveSaleEntry()">
+        <i class="fas fa-save chk"></i> Save Entry
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── EXPENSE MODAL ────────────────────────────────── -->
+<div class="mbackdrop" id="m-exp">
+  <div class="mbox">
+    <div class="mhd">
+      <div class="mhd-title"><i class="fas fa-file-invoice-dollar"></i> New Expense Entry</div>
+      <button class="mclose" onclick="closeModal('m-exp')">&#10005;</button>
+    </div>
+    <div class="mbody">
+      <div class="frow">
+        <div class="fg">
+          <label class="flabel">Month <span class="req">*</span></label>
+          <select class="finp" id="exp-month"></select>
+        </div>
+        <div class="fg">
+          <label class="flabel">Total Expenses (₹) <span class="req">*</span></label>
+          <input class="finp" type="number" id="exp-amt" placeholder="e.g. 845000" min="0">
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('m-exp')">Cancel</button>
+      <button class="btn btn-amber" id="exp-save" onclick="saveExpenseEntry()">
+        <i class="fas fa-save chk"></i> Save Entry
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+
+<!-- ═══════════════ EXTRA MODALS ═══════════════ -->
+
+<!-- SHORTCUTS MODAL -->
+<div class="mbackdrop" id="m-shortcuts">
+  <div class="mbox" style="max-width:380px">
+    <div class="mhd">
+      <div class="mhd-title"><i class="fas fa-keyboard"></i> Keyboard Shortcuts</div>
+      <button class="mclose" onclick="closeModal('m-shortcuts')">&#10005;</button>
+    </div>
+    <div class="mbody">
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:9px 6px"><kbd style="background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">Ctrl + D</kbd></td>
+          <td style="padding:9px 6px;color:var(--text2)">Dashboard</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:9px 6px"><kbd style="background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">Ctrl + P</kbd></td>
+          <td style="padding:9px 6px;color:var(--text2)">New Purchase Entry</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:9px 6px"><kbd style="background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">Ctrl + K</kbd></td>
+          <td style="padding:9px 6px;color:var(--text2)">New Sale Entry</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:9px 6px"><kbd style="background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">Ctrl + E</kbd></td>
+          <td style="padding:9px 6px;color:var(--text2)">New Expense Entry</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:9px 6px"><kbd style="background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">Ctrl + R</kbd></td>
+          <td style="padding:9px 6px;color:var(--text2)">Refresh Data</td>
+        </tr>
+        <tr>
+          <td style="padding:9px 6px"><kbd style="background:var(--bg2);border:1px solid var(--border-d);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700">Escape</kbd></td>
+          <td style="padding:9px 6px;color:var(--text2)">Close modal / sidebar</td>
+        </tr>
+      </table>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-brand" onclick="closeModal('m-shortcuts')">Got it!</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIRM SIGNOUT MODAL (custom) -->
+<div class="mbackdrop" id="m-signout">
+  <div class="mbox" style="max-width:360px">
+    <div class="mhd">
+      <div class="mhd-title"><i class="fas fa-sign-out-alt"></i> Sign Out</div>
+      <button class="mclose" onclick="closeModal('m-signout')">&#10005;</button>
+    </div>
+    <div class="mbody" style="text-align:center;padding:28px 24px">
+      <div style="width:60px;height:60px;border-radius:50%;background:var(--red-l);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;color:var(--brand)">
+        <i class="fas fa-sign-out-alt"></i>
+      </div>
+      <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:8px">Sign Out?</div>
+      <div style="font-size:13px;color:var(--muted)">Aap Fresko P&L Tracker se logout karna chahte hain?</div>
+    </div>
+    <div class="mfoot" style="justify-content:center;gap:12px">
+      <button class="btn btn-ghost" onclick="closeModal('m-signout')" style="min-width:100px">Cancel</button>
+      <button class="btn btn-brand" onclick="try{localStorage.removeItem('fresko_session')}catch(e){}location.reload()" style="min-width:100px"><i class="fas fa-sign-out-alt"></i> Sign Out</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
