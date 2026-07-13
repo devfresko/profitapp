@@ -84,6 +84,106 @@ function _api(action, data, ok, err) {
   document.head.appendChild(s);
 }
 
+/* ═══════════════════════════════════════════════════════════
+   WHATSAPP INTEGRATION — MessageAutoSender API
+   Triggers: login success, purchase save, sale save, expense save
+═══════════════════════════════════════════════════════════ */
+
+var WA_API_KEY   = '01de01ec7d489783060e2fdc535a87ca5e963b7baba7e95ff3';
+var WA_BASIC_AUTH = 'ZnJlc2tvOkFHUk9AQEAyMDI2';
+var WA_API_URL   = 'https://app.messageautosender.com/api/v1/message/create';
+
+// Admin WhatsApp numbers to notify (include country code, no +)
+var WA_ADMIN_NUMBERS = [
+  '919999999999'   // ← replace with actual Fresko admin number(s)
+];
+
+function _waSend(mobileNos, message) {
+  try {
+    var url = WA_API_URL
+      + '?apiKey=' + WA_API_KEY
+      + '&receiverMobileNo=' + encodeURIComponent(mobileNos.join(','))
+      + '&message=' + encodeURIComponent(message);
+
+    fetch(url, {
+      method: 'GET',
+      headers: { 'Authorization': 'Basic ' + WA_BASIC_AUTH }
+    }).then(function(r) {
+      console.log('[WA] Status:', r.status);
+    }).catch(function(e) {
+      console.warn('[WA] Error:', e.message);
+    });
+  } catch(e) {
+    console.warn('[WA] Send failed:', e.message);
+  }
+}
+
+function _waNotify(event, data) {
+  if (!WA_ADMIN_NUMBERS || !WA_ADMIN_NUMBERS.length) return;
+  const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true,
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  });
+  let msg = '';
+
+  switch(event) {
+    case 'login':
+      msg = '🔐 *Fresko P&L — Login Alert*\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '👤 *Name:* ' + (data.name || '—') + '\n'
+          + '📧 *Email:* ' + (data.email || '—') + '\n'
+          + '🏢 *Dept:* ' + (data.dept || '—') + '\n'
+          + '⏰ *Time:* ' + now + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '_Fresko P&L Tracker_';
+      break;
+
+    case 'purchase':
+      msg = '🛒 *Fresko — Purchase Entry Added*\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '📅 *Date:* ' + (data.date || '—') + '\n'
+          + '📦 *Qty:* ' + _fmt0(data.qty) + '\n'
+          + '💰 *Amount:* ₹' + _fmt(data.amount) + '\n'
+          + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
+          + '⏰ *Time:* ' + now + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '_Fresko P&L Tracker_';
+      break;
+
+    case 'sale':
+      msg = '🚚 *Fresko — Sale Entry Added*\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '📅 *Date:* ' + (data.date || '—') + '\n'
+          + '🏷️ *Party:* ' + (data.party || '—') + '\n'
+          + '📦 *Qty:* ' + _fmt0(data.qty) + '\n'
+          + '💰 *Amount:* ₹' + _fmt(data.amount) + '\n'
+          + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
+          + '⏰ *Time:* ' + now + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '_Fresko P&L Tracker_';
+      break;
+
+    case 'expense':
+      msg = '💸 *Fresko — Expense Entry Added*\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '📅 *Month:* ' + (data.month || '—') + '\n'
+          + '💰 *Amount:* ₹' + _fmt(data.amount) + '\n'
+          + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
+          + '⏰ *Time:* ' + now + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '_Fresko P&L Tracker_';
+      break;
+
+    default: return;
+  }
+
+  _waSend(WA_ADMIN_NUMBERS, msg);
+}
+
+// Helper (safe: may be called before fmt is defined)
+function _fmt(n)  { return Math.round(Math.abs(Number(n)||0)).toLocaleString('en-IN'); }
+function _fmt0(n) { return Math.round(Number(n)||0).toLocaleString('en-IN'); }
+
+
 /* ─────────────────────────────────────────────────────────
    LOGIN
 ───────────────────────────────────────────────────────── */
@@ -122,6 +222,8 @@ function doLogin() {
         _TOKEN = res.token;
         // Save session to localStorage for PWA persistence
         try { localStorage.setItem('fresko_session', JSON.stringify({ user: res.user, token: res.token })); } catch(e) {}
+        // WhatsApp login alert
+        _waNotify('login', res.user);
         showWelcomeCard(res.user);
       } else {
         showLgErr(res ? res.error : 'Authentication failed.');
@@ -146,8 +248,10 @@ function showWelcomeCard(u) {
 }
 
 function enterApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').classList.add('active');
+  const lw = document.getElementById('login-wrapper');
+  const aw = document.getElementById('app-wrapper');
+  if (lw) lw.style.display = 'none';
+  if (aw) aw.style.display = 'block';
   _initApp();
 }
 
@@ -157,7 +261,6 @@ function enterApp() {
    APP INIT
 ───────────────────────────────────────────────────────── */
 function _initApp() {
-  document.getElementById('fy').textContent = new Date().getFullYear();
   const tdEl = document.getElementById('tb-date'); if(tdEl) tdEl.textContent = new Date().toLocaleDateString('en-IN', {
     weekday:'short', day:'numeric', month:'short', year:'numeric'
   });
@@ -1246,7 +1349,9 @@ function savePurchaseEntry() {
     r => {
       _endBtn('pur-save');
       if (r && r.success) {
-        closeModal('m-pur'); toast('✅ Purchase entry save ho gayi!', 'success'); _loadData(false);
+        closeModal('m-pur'); toast('✅ Purchase entry save ho gayi!', 'success');
+        _waNotify('purchase', { date: document.getElementById('pur-date').value, qty: document.getElementById('pur-qty').value, amount: document.getElementById('pur-amt').value });
+        _loadData(false);
       } else toast('❌ ' + ((r && r.error) || 'Save failed'), 'error');
     },
     e => { _endBtn('pur-save'); toast('❌ ' + (e.message || 'Error'), 'error'); }
@@ -1267,7 +1372,9 @@ function saveSaleEntry() {
     r => {
       _endBtn('sal-save');
       if (r && r.success) {
-        closeModal('m-sal'); toast('✅ Sale entry save ho gayi!', 'success'); _loadData(false);
+        closeModal('m-sal'); toast('✅ Sale entry save ho gayi!', 'success');
+        _waNotify('sale', { date: document.getElementById('sal-date').value, party: document.getElementById('sal-party').value, qty: document.getElementById('sal-qty').value, amount: document.getElementById('sal-amt').value });
+        _loadData(false);
       } else toast('❌ ' + ((r && r.error) || 'Save failed'), 'error');
     },
     e => { _endBtn('sal-save'); toast('❌ ' + (e.message || 'Error'), 'error'); }
@@ -1284,7 +1391,9 @@ function saveExpenseEntry() {
     r => {
       _endBtn('exp-save');
       if (r && r.success) {
-        closeModal('m-exp'); toast('✅ Expense save ho gayi!', 'success'); _loadData(false);
+        closeModal('m-exp'); toast('✅ Expense save ho gayi!', 'success');
+        _waNotify('expense', { month: document.getElementById('exp-month').value, amount: document.getElementById('exp-amt').value });
+        _loadData(false);
       } else toast('❌ ' + ((r && r.error) || 'Save failed'), 'error');
     },
     e => { _endBtn('exp-save'); toast('❌ ' + (e.message || 'Error'), 'error'); }
@@ -1654,7 +1763,7 @@ document.addEventListener('keydown', e => {
     document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
     closeSidebar();
   }
-  if (!document.getElementById('app-wrapper').style.display === 'block') return;
+  if (document.getElementById('app-wrapper').style.display !== 'block') return;
   if (e.ctrlKey && e.key === 'd') { e.preventDefault(); goTo('dashboard'); }
   if (e.ctrlKey && e.key === 'p') { e.preventDefault(); openModal('m-pur'); }
   if (e.ctrlKey && e.key === 'k') { e.preventDefault(); openModal('m-sal'); }
@@ -1666,18 +1775,11 @@ document.addEventListener('keydown', e => {
    WINDOW LOAD — FINAL INIT
 ───────────────────────────────────────────────────────── */
 window.addEventListener('load', () => {
-  const lgY = document.getElementById('lg-year');
-  if (lgY) lgY.textContent = new Date().getFullYear();
-  const fyEl = document.getElementById('fy');
+  // Set footer year
+  const fyEl = document.getElementById('footer-year');
   if (fyEl) fyEl.textContent = new Date().getFullYear();
 
-  // Date chip
-  const chipEl = document.getElementById('tb-date-chip');
-  if (chipEl) chipEl.textContent = new Date().toLocaleDateString('en-IN', {
-    weekday:'short', day:'numeric', month:'short', year:'numeric'
-  });
-
-  // Dismiss modal on backdrop click
+  // Backdrop close on modal click
   document.querySelectorAll('.modal-overlay').forEach(el => {
     el.addEventListener('click', function(e) {
       if (e.target === this) this.classList.remove('show');
@@ -1688,10 +1790,6 @@ window.addEventListener('load', () => {
   if (USER && _TOKEN) {
     enterApp();
   }
-  // Backdrop close on modal click
-  document.querySelectorAll('.modal-overlay').forEach(el => {
-    el.addEventListener('click', function(e) { if (e.target === this) this.classList.remove('show'); });
-  });
 });
 
 /* ─────────────────────────────────────────────────────────
