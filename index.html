@@ -491,6 +491,30 @@
 
     #app-wrapper { display: none; height: 100vh; width: 100vw; overflow: hidden; }
 
+    /* ── SUMMARY TABLE ROWS ── */
+    .cur-month td { background: var(--amber-l) !important; }
+    .total-row td { background: #F8FAFC !important; font-weight: 800; border-top: 2px solid var(--border); }
+
+    /* ── HEALTH BAR ── */
+    .health-bar-wrap { margin-bottom: 14px; }
+    .health-bar-lbl  { display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px; }
+    .health-bar-track{ height:7px;background:var(--border);border-radius:7px;overflow:hidden; }
+    .health-bar-fill { height:100%;border-radius:7px;transition:width .8s ease; }
+
+    /* ── btn-amber variant ── */
+    .btn-amber { background: var(--amber); color: #fff; border-color: var(--amber); }
+    .btn-amber:hover { background: var(--amber-d); }
+
+    /* ── table num column ── */
+    table.tbl td.num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* ── print ── */
+    @media print {
+      #sb, #topbar { display: none !important; }
+      #content { padding: 0; }
+      .card { box-shadow: none; break-inside: avoid; }
+    }
+
     /* ── SUMMARY TABLE ── */
     .cur-month td { background: #FEF7E0 !important; font-weight: 700; }
     .total-row td { background: #F8FAFC !important; font-weight: 800; border-top: 2px solid var(--border); }
