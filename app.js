@@ -37,7 +37,7 @@ let _lastChange = '0';
 ───────────────────────────────────────────────────────── */
 
 // ⚠️  GAS deployment URL yahan daalo (Deploy → New → Web App → Anyone)
-var API = 'https://script.google.com/macros/s/AKfycbzjFp3cNBSxVib6xtYyFyPiy2dRfhdtcHBJjE2pcxkH_DLOnSP8hKIKPxn5Tf9Ck_IA/exec';
+var API = 'https://script.google.com/macros/s/AKfycbzPsjWq27q3ckAFxMVeGiNefMk5LAKTBhpjd9L1Qls0wL0t3WL0USvNnl6hQVAI8FIs/exec';
 
 var _cbIdx = 0;
 
@@ -1307,13 +1307,17 @@ function saveExpenseEntry() {
    MODAL HELPERS
 ───────────────────────────────────────────────────────── */
 function openModal(id) {
-  // Pre-fill date fields
   const today = _todayStr();
   if (id === 'm-pur') {
+    // Reset to manual tab
+    purTab('manual');
     document.getElementById('pur-date').value = today;
     document.getElementById('pur-qty').value  = '';
     document.getElementById('pur-amt').value  = '';
+    pdfReset();
   } else if (id === 'm-sal') {
+    // Reset to single tab
+    salTab('single');
     document.getElementById('sal-date').value = today;
     document.getElementById('sal-qty').value  = '';
     document.getElementById('sal-amt').value  = '';
@@ -1715,3 +1719,362 @@ if ('serviceWorker' in navigator) {
 
 // Sidebar toggle alias
 function toggleSB() { toggleSidebar(); }
+
+/* ═══════════════════════════════════════════════════════════
+   PURCHASE MODAL — TAB SWITCHING
+═══════════════════════════════════════════════════════════ */
+function purTab(tab) {
+  var panels = { manual: 'pur-panel-manual', pdf: 'pur-panel-pdf' };
+  var fts    = { manual: 'pur-ft-manual',    pdf: 'pur-ft-pdf'    };
+
+  Object.keys(panels).forEach(function(t) {
+    var panel = document.getElementById(panels[t]);
+    var ft    = document.getElementById(fts[t]);
+    var btn   = document.getElementById('pur-tab-' + t);
+    if (!btn) return;
+    var isActive = t === tab;
+    if (panel) panel.style.display = isActive ? '' : 'none';
+    if (ft)    ft.style.display    = isActive ? 'flex' : 'none';
+    btn.style.borderBottom = isActive ? '2px solid var(--red)' : '2px solid transparent';
+    btn.style.color        = isActive ? 'var(--red)'           : 'var(--muted)';
+    btn.style.fontWeight   = isActive ? '700'                  : '600';
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PDF TEXT PARSER — extracts DATE TOTAL rows
+   Format in PDF: "DATE TOTAL... <qty> <packWgt> <amount> <netAmount>"
+   We capture: date (from nearest preceding DD/MM/YYYY line) + Net Amount (last col)
+═══════════════════════════════════════════════════════════ */
+var _pdfParsed = [];
+
+function parsePurchasePDF() {
+  var raw = document.getElementById('pdf-text-input').value.trim();
+  if (!raw) { toast('Pehle PDF text paste karein', 'warning'); return; }
+
+  var lines   = raw.split('\n').map(function(l) { return l.trim(); });
+  var results = [];
+  var lastDate = null;
+
+  var dateRe  = /^(\d{2})\/(\d{2})\/(\d{4})/;
+  var totalRe = /^DATE\s+TOTAL[\.\s,]+([\d,]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/i;
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+
+    // Capture latest date seen
+    var dm = line.match(dateRe);
+    if (dm) {
+      lastDate = dm[3] + '-' + dm[2] + '-' + dm[1]; // YYYY-MM-DD
+    }
+
+    // Capture DATE TOTAL line
+    var tm = line.match(totalRe);
+    if (tm && lastDate) {
+      var qty    = parseFloat(String(tm[1]).replace(/,/g, '')) || 0;
+      var netAmt = parseFloat(String(tm[4]).replace(/,/g, '')) || 0;
+
+      if (netAmt <= 0) continue;
+
+      // Deduplicate same date
+      var dup = false;
+      for (var j = 0; j < results.length; j++) {
+        if (results[j].date === lastDate) { dup = true; break; }
+      }
+      if (!dup) {
+        results.push({ date: lastDate, qty: Math.round(qty), netAmt: netAmt });
+      }
+    }
+  }
+
+  _pdfParsed = results;
+
+  if (!results.length) {
+    toast('Koi DATE TOTAL row nahi mila. PDF text sahi paste hua?', 'warning');
+    return;
+  }
+
+  // Sort by date ascending
+  results.sort(function(a, b) { return a.date.localeCompare(b.date); });
+
+  // Build preview table
+  var totalAmt = 0, totalQty = 0;
+  var trows = results.map(function(r, i) {
+    totalAmt += r.netAmt;
+    totalQty += r.qty;
+    return '<tr style="border-top:1px solid var(--border)">'
+      + '<td style="padding:7px 10px;font-size:11px;color:var(--sub);width:30px">' + (i+1) + '</td>'
+      + '<td style="padding:7px 10px;font-weight:600;font-size:12px;white-space:nowrap">' + fmtD(r.date) + '</td>'
+      + '<td style="padding:7px 10px;font-size:12px;color:var(--muted);text-align:right">' + r.qty.toLocaleString('en-IN') + '</td>'
+      + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--red)">₹' + fmt(r.netAmt) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('pdf-preview-table').innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="background:var(--bg)">'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted)">#</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted)">Date</th>'
+    + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Qty (kg)</th>'
+    + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Net Amount</th>'
+    + '</tr></thead>'
+    + '<tbody>' + trows + '</tbody>'
+    + '</table>';
+
+  document.getElementById('pdf-found-count').textContent = results.length;
+  document.getElementById('pdf-total-amt').textContent   = '₹' + fmt(totalAmt);
+  document.getElementById('pdf-total-qty').textContent   = totalQty.toLocaleString('en-IN') + ' kg';
+
+  // Show step 2
+  document.getElementById('pdf-step-1').style.display  = 'none';
+  document.getElementById('pdf-step-2').style.display  = '';
+  document.getElementById('pdf-import-btn').style.display = '';
+}
+
+function pdfReset() {
+  _pdfParsed = [];
+  var ta = document.getElementById('pdf-text-input');
+  if (ta) ta.value = '';
+  var s1 = document.getElementById('pdf-step-1');
+  var s2 = document.getElementById('pdf-step-2');
+  var ib = document.getElementById('pdf-import-btn');
+  if (s1) s1.style.display = '';
+  if (s2) s2.style.display = 'none';
+  if (ib) ib.style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PDF BULK IMPORT — sends parsed entries to GAS bulkSavePurchase
+═══════════════════════════════════════════════════════════ */
+function importPurchasePDF() {
+  if (!_pdfParsed.length) { toast('Koi entries nahi hain', 'warning'); return; }
+  if (_busy) return;
+
+  var btn = document.getElementById('pdf-import-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…'; }
+  _busy = true;
+
+  var entries = _pdfParsed.map(function(r) {
+    return { date: r.date, qty: r.qty, amount: r.netAmt };
+  });
+
+  var totalAmt = entries.reduce(function(s, e) { return s + e.amount; }, 0);
+
+  _api('bulkSavePurchase', { entries: entries },
+    function(r) {
+      _busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries'; }
+      if (r && r.success) {
+        closeModal('m-pur');
+        pdfReset();
+        toast('✅ ' + (r.saved || entries.length) + ' purchase entries import ho gayin!', 'success');
+        _waSend(WA_ADMIN_NUMBERS,
+          '📦 *Fresko — Bulk Purchase Import*\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '📅 *Entries:* ' + (r.saved || entries.length) + ' din\n'
+          + '💰 *Total:* ₹' + fmt(totalAmt) + '\n'
+          + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '_Fresko P&L Tracker_'
+        );
+        _loadData(false);
+      } else {
+        toast('❌ ' + ((r && r.error) || 'Import failed'), 'error');
+      }
+    },
+    function(e) {
+      _busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries'; }
+      toast('❌ ' + (e.message || 'Network error'), 'error');
+    }
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SALE MODAL — TAB SWITCHING
+═══════════════════════════════════════════════════════════ */
+function salTab(tab) {
+  var tabs = ['single', 'local', 'supply'];
+  tabs.forEach(function(t) {
+    var btn    = document.getElementById('sal-tab-' + t);
+    var panel  = document.getElementById('sal-panel-' + t);
+    var ft     = document.getElementById('sal-ft-' + t);
+    if (!btn) return;
+    var active = t === tab;
+    var color  = t === 'local' ? 'var(--red)' : 'var(--green)';
+    btn.style.borderBottom = active ? '2px solid ' + color : '2px solid transparent';
+    btn.style.color        = active ? color : 'var(--muted)';
+    btn.style.fontWeight   = active ? '700' : '600';
+    if (panel) panel.style.display = active ? '' : 'none';
+    if (ft)    ft.style.display    = active ? 'flex' : 'none';
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SALE BULK — BUILD DATE ROWS
+   type = 'local' | 'supply'
+═══════════════════════════════════════════════════════════ */
+function salBuildRows(type) {
+  var monthInput = document.getElementById(type + '-month');
+  var tbody      = document.getElementById(type + '-tbody');
+  var emptyEl    = document.getElementById(type + '-empty');
+  var totalsEl   = document.getElementById(type + '-totals');
+  if (!monthInput || !monthInput.value || !tbody) return;
+
+  var parts       = monthInput.value.split('-');
+  var year        = parseInt(parts[0]);
+  var month       = parseInt(parts[1]);
+  var daysInMonth = new Date(year, month, 0).getDate();
+  var dayNames    = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  var rows = '';
+  for (var d = 1; d <= daysInMonth; d++) {
+    var dateObj  = new Date(year, month - 1, d);
+    var dayName  = dayNames[dateObj.getDay()];
+    var isSun    = dateObj.getDay() === 0;
+    var mm       = String(month).padStart(2, '0');
+    var dd       = String(d).padStart(2, '0');
+
+    rows += '<tr id="' + type + '-row-' + d + '" style="border-top:1px solid var(--border);'
+      + (isSun ? 'background:rgba(251,188,5,.07)' : '') + '">'
+      + '<td style="padding:5px 6px;font-size:10px;color:var(--sub);width:22px">' + d + '</td>'
+      + '<td style="padding:5px 6px;font-weight:' + (isSun ? '700' : '500') + ';font-size:11px;'
+      + 'color:' + (isSun ? 'var(--amber-d)' : 'var(--text)') + ';white-space:nowrap">'
+      + dd + ' ' + dayName
+      + (isSun ? ' <span style="font-size:9px;background:var(--amber-l);color:var(--amber-d);padding:1px 4px;border-radius:3px">Sun</span>' : '')
+      + '</td>'
+      + '<td style="padding:4px 5px;text-align:right">'
+      + '<input type="number" min="0" placeholder="0" id="' + type + '-qty-' + d + '"'
+      + ' style="width:68px;text-align:right;padding:4px 5px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--white)"'
+      + ' oninput="salUpdateTotal(\'' + type + '\')">'
+      + '</td>'
+      + '<td style="padding:4px 5px;text-align:right">'
+      + '<input type="number" min="0" placeholder="0" id="' + type + '-amt-' + d + '"'
+      + ' style="width:100px;text-align:right;padding:4px 5px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:var(--white)"'
+      + ' oninput="salUpdateTotal(\'' + type + '\')">'
+      + '</td>'
+      + '<td style="padding:4px 6px;text-align:center">'
+      + '<input type="checkbox" id="' + type + '-skip-' + d + '"'
+      + (isSun ? ' checked' : '')
+      + ' onchange="salToggleRow(\'' + type + '\',' + d + ')" style="width:13px;height:13px;cursor:pointer">'
+      + '</td>'
+      + '</tr>';
+  }
+
+  tbody.innerHTML         = rows;
+  emptyEl.style.display  = 'none';
+  totalsEl.style.display = '';
+
+  // Dim Sundays initially
+  for (var d2 = 1; d2 <= daysInMonth; d2++) {
+    if (new Date(year, month - 1, d2).getDay() === 0) {
+      salToggleRow(type, d2);
+    }
+  }
+  salUpdateTotal(type);
+}
+
+function salToggleRow(type, day) {
+  var skipCb = document.getElementById(type + '-skip-' + day);
+  var row    = document.getElementById(type + '-row-' + day);
+  var qInp   = document.getElementById(type + '-qty-' + day);
+  var aInp   = document.getElementById(type + '-amt-' + day);
+  if (!skipCb || !row) return;
+  var skipped        = skipCb.checked;
+  row.style.opacity  = skipped ? '0.38' : '1';
+  if (qInp) qInp.disabled = skipped;
+  if (aInp) aInp.disabled = skipped;
+  salUpdateTotal(type);
+}
+
+function salUpdateTotal(type) {
+  var monthInput = document.getElementById(type + '-month');
+  if (!monthInput || !monthInput.value) return;
+  var parts       = monthInput.value.split('-');
+  var daysInMonth = new Date(parseInt(parts[0]), parseInt(parts[1]), 0).getDate();
+  var totalAmt = 0, count = 0;
+  for (var d = 1; d <= daysInMonth; d++) {
+    var skipCb = document.getElementById(type + '-skip-' + d);
+    if (skipCb && skipCb.checked) continue;
+    var aInp = document.getElementById(type + '-amt-' + d);
+    if (!aInp) continue;
+    var amt = parseFloat(aInp.value) || 0;
+    if (amt > 0) { totalAmt += amt; count++; }
+  }
+  var totEl  = document.getElementById(type + '-total-amt');
+  var cntEl  = document.getElementById(type + '-entry-count');
+  if (totEl) totEl.textContent = '₹' + fmt(totalAmt);
+  if (cntEl) cntEl.textContent = count + ' entries';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SALE BULK SAVE — collects filled rows → GAS bulkSaveSale
+═══════════════════════════════════════════════════════════ */
+function saveBulkSale(type) {
+  var monthInput = document.getElementById(type + '-month');
+  if (!monthInput || !monthInput.value) {
+    toast('Pehle month select karein', 'warning'); return;
+  }
+  var parts       = monthInput.value.split('-');
+  var year        = parts[0];
+  var month       = parts[1];
+  var daysInMonth = new Date(parseInt(year), parseInt(month), 0).getDate();
+  var partyLabel  = type === 'local' ? 'LOCAL SALE' : 'SUPPLY SALE';
+  var entries     = [];
+
+  for (var d = 1; d <= daysInMonth; d++) {
+    var skipCb = document.getElementById(type + '-skip-' + d);
+    if (skipCb && skipCb.checked) continue;
+    var qInp = document.getElementById(type + '-qty-' + d);
+    var aInp = document.getElementById(type + '-amt-' + d);
+    var amt  = parseFloat((aInp && aInp.value) || 0) || 0;
+    var qty  = parseFloat((qInp && qInp.value) || 0) || 0;
+    if (amt <= 0) continue;
+    entries.push({
+      date:   year + '-' + month + '-' + String(d).padStart(2, '0'),
+      party:  partyLabel,
+      qty:    qty,
+      amount: amt
+    });
+  }
+
+  if (!entries.length) { toast('Koi amount nahi dala gaya', 'warning'); return; }
+  if (_busy) return;
+
+  var btnId = type + '-save-btn';
+  var btn   = document.getElementById(btnId);
+  var lbl   = type === 'local' ? 'LOCAL' : 'SUPPLY';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…'; }
+  _busy = true;
+
+  var totalAmt = entries.reduce(function(s, e) { return s + e.amount; }, 0);
+
+  _api('bulkSaveSale', { entries: entries },
+    function(r) {
+      _busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Save ' + lbl + ' Entries'; }
+      if (r && r.success) {
+        closeModal('m-sal');
+        toast('✅ ' + (r.saved || entries.length) + ' ' + partyLabel + ' entries save ho gayin!', 'success');
+        _waSend(WA_ADMIN_NUMBERS,
+          '🚚 *Fresko — Bulk Sale Import*\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '🏷️ *Party:* ' + partyLabel + '\n'
+          + '📅 *Entries:* ' + (r.saved || entries.length) + ' din\n'
+          + '💰 *Total:* ₹' + fmt(totalAmt) + '\n'
+          + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n'
+          + '_Fresko P&L Tracker_'
+        );
+        _loadData(false);
+      } else {
+        toast('❌ ' + ((r && r.error) || 'Save failed'), 'error');
+      }
+    },
+    function(e) {
+      _busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Save ' + lbl + ' Entries'; }
+      toast('❌ ' + (e.message || 'Network error'), 'error');
+    }
+  );
+}
