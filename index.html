@@ -890,21 +890,37 @@
 
 <!-- ══════════════ MODALS ══════════════ -->
 
-<!-- Purchase Modal -->
+<!-- Purchase Modal — Manual Entry + PDF Import -->
 <div class="modal-overlay" id="m-pur">
-  <div class="modal-box modal-sm">
+  <div class="modal-box" style="max-width:620px;width:96vw">
     <div class="modal-hd">
-      <div class="modal-title"><i class="fas fa-shopping-cart"></i> New Purchase Entry</div>
+      <div class="modal-title"><i class="fas fa-shopping-cart"></i> Purchase Entry</div>
       <button class="modal-close" onclick="closeModal('m-pur')"><i class="fas fa-times"></i></button>
     </div>
-    <div class="modal-body">
+
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
+      <button id="pur-tab-manual" onclick="purTab('manual')"
+        style="flex:1;padding:10px 6px;font-size:12px;font-weight:700;border:none;cursor:pointer;
+               border-bottom:2px solid var(--red);color:var(--red);background:transparent;transition:all .2s">
+        <i class="fas fa-pen" style="margin-right:5px"></i>Manual Entry
+      </button>
+      <button id="pur-tab-pdf" onclick="purTab('pdf')"
+        style="flex:1;padding:10px 6px;font-size:12px;font-weight:600;border:none;cursor:pointer;
+               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
+        <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
+      </button>
+    </div>
+
+    <!-- ── MANUAL TAB ── -->
+    <div id="pur-panel-manual" class="modal-body">
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Date <span class="req">*</span></label>
           <input class="form-input" type="date" id="pur-date">
         </div>
         <div class="form-group">
-          <label class="form-label">Total Qty Purchased <span class="req">*</span></label>
+          <label class="form-label">Total Qty Purchased</label>
           <input class="form-input" type="number" id="pur-qty" placeholder="e.g. 530" min="0">
         </div>
       </div>
@@ -912,25 +928,117 @@
         <label class="form-label">Total Purchase Amount (₹) <span class="req">*</span></label>
         <input class="form-input" type="number" id="pur-amt" placeholder="e.g. 67890" min="0">
       </div>
-      <div class="info-box blue"><i class="fas fa-info-circle"></i><span>Entry save hone ke baad SUMMARY sheet automatically update ho jaayegi.</span></div>
+      <div class="info-box blue"><i class="fas fa-info-circle"></i>
+        <span>Entry save hone ke baad SUMMARY sheet automatically update ho jaayegi.</span>
+      </div>
     </div>
+
+    <!-- ── PDF IMPORT TAB ── -->
+    <div id="pur-panel-pdf" class="modal-body" style="display:none">
+      <div class="info-box blue" style="margin-bottom:14px">
+        <i class="fas fa-info-circle"></i>
+        <span>Accounting software se export hua Purchase Register PDF kholo → <strong>Ctrl+A</strong> → <strong>Ctrl+C</strong> → Neeche paste karo. App <strong>DATE TOTAL</strong> rows se date-wise entries automatically extract karega.</span>
+      </div>
+
+      <!-- Step 1: Paste textarea -->
+      <div id="pdf-step-1">
+        <div class="form-group" style="margin-bottom:12px">
+          <label class="form-label">PDF Text Yahan Paste Karein <span class="req">*</span></label>
+          <textarea id="pdf-text-input" class="form-input"
+            style="min-height:150px;font-size:11px;font-family:monospace;resize:vertical;line-height:1.4"
+            placeholder="PDF open karo → Ctrl+A → Ctrl+C → Yahan Ctrl+V karo&#10;&#10;App DATE TOTAL rows dhundh kar date-wise entries banayega automatically."></textarea>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="parsePurchasePDF()" style="width:100%;padding:10px">
+          <i class="fas fa-magic" style="margin-right:6px"></i>Extract Date-wise Entries
+        </button>
+      </div>
+
+      <!-- Step 2: Preview -->
+      <div id="pdf-step-2" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:700;color:var(--text)">
+            <i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>
+            <span id="pdf-found-count">0</span> entries extract hue
+          </span>
+          <button onclick="pdfReset()"
+            style="font-size:11px;color:var(--muted);border:none;background:none;cursor:pointer;text-decoration:underline">
+            ↩ Reset
+          </button>
+        </div>
+
+        <div id="pdf-preview-table"
+          style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+          <!-- filled by parsePurchasePDF() -->
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--green-l);border:1px solid #A8DAB5;border-radius:8px;margin-bottom:12px">
+          <i class="fas fa-rupee-sign" style="color:var(--green);font-size:20px"></i>
+          <div style="flex:1">
+            <div style="font-size:11px;color:var(--muted)">Total Net Amount</div>
+            <div id="pdf-total-amt" style="font-size:17px;font-weight:800;color:var(--green)">₹0</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--muted)">Total Qty (kg)</div>
+            <div id="pdf-total-qty" style="font-size:14px;font-weight:700;color:var(--text)">0</div>
+          </div>
+        </div>
+
+        <div class="info-box amber">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>Preview check karein. Import ke baad entries sheet mein save ho jaayengi.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
     <div class="modal-ft">
-      <button class="btn btn-secondary btn-sm" onclick="closeModal('m-pur')">Cancel</button>
-      <button class="btn btn-primary btn-sm" id="pur-save" onclick="savePurchaseEntry()">
-        <i class="fas fa-save"></i> Save Entry
-      </button>
+      <!-- Manual footer -->
+      <div id="pur-ft-manual" style="display:flex;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-pur')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="pur-save" onclick="savePurchaseEntry()">
+          <i class="fas fa-save"></i> Save Entry
+        </button>
+      </div>
+      <!-- PDF footer -->
+      <div id="pur-ft-pdf" style="display:none;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-pur')">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="pdf-import-btn" onclick="importPurchasePDF()" style="display:none">
+          <i class="fas fa-upload"></i> Import All Entries
+        </button>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- Sales Modal -->
+<!-- Sales Modal — Single Entry + Bulk LOCAL + Bulk SUPPLY -->
 <div class="modal-overlay" id="m-sal">
-  <div class="modal-box modal-sm">
+  <div class="modal-box" style="max-width:640px;width:96vw">
     <div class="modal-hd">
-      <div class="modal-title"><i class="fas fa-truck" style="color:var(--green)"></i> New Sales Entry</div>
+      <div class="modal-title"><i class="fas fa-truck" style="color:var(--green)"></i> Sales Entry</div>
       <button class="modal-close" onclick="closeModal('m-sal')"><i class="fas fa-times"></i></button>
     </div>
-    <div class="modal-body">
+
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
+      <button id="sal-tab-single" onclick="salTab('single')"
+        style="flex:1;padding:9px 4px;font-size:11px;font-weight:700;border:none;cursor:pointer;
+               border-bottom:2px solid var(--green);color:var(--green);background:transparent;transition:all .2s">
+        <i class="fas fa-pen" style="margin-right:4px"></i>Single Entry
+      </button>
+      <button id="sal-tab-local" onclick="salTab('local')"
+        style="flex:1;padding:9px 4px;font-size:11px;font-weight:600;border:none;cursor:pointer;
+               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
+        <i class="fas fa-store" style="margin-right:4px"></i>Bulk LOCAL
+      </button>
+      <button id="sal-tab-supply" onclick="salTab('supply')"
+        style="flex:1;padding:9px 4px;font-size:11px;font-weight:600;border:none;cursor:pointer;
+               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
+        <i class="fas fa-truck" style="margin-right:4px"></i>Bulk SUPPLY
+      </button>
+    </div>
+
+    <!-- ── SINGLE ENTRY ── -->
+    <div id="sal-panel-single" class="modal-body">
       <div class="form-row-3">
         <div class="form-group">
           <label class="form-label">Date <span class="req">*</span></label>
@@ -944,20 +1052,118 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Qty Sent <span class="req">*</span></label>
-          <input class="form-input" type="number" id="sal-qty" placeholder="e.g. 850" min="0">
+          <label class="form-label">Qty Sent</label>
+          <input class="form-input" type="number" id="sal-qty" placeholder="850" min="0">
         </div>
       </div>
       <div class="form-group">
         <label class="form-label">Total Sales Amount (₹) <span class="req">*</span></label>
-        <input class="form-input" type="number" id="sal-amt" placeholder="e.g. 50400" min="0">
+        <input class="form-input" type="number" id="sal-amt" placeholder="50400" min="0">
       </div>
     </div>
+
+    <!-- ── BULK LOCAL ── -->
+    <div id="sal-panel-local" style="display:none">
+      <div style="padding:10px 16px;background:var(--red-l);border-bottom:1px solid var(--border);
+                  font-size:12px;color:var(--red-d);font-weight:600">
+        <i class="fas fa-store" style="margin-right:6px"></i>LOCAL SALE — Month-wise date-by-date entry
+      </div>
+      <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
+        <input class="form-input" type="month" id="local-month" style="width:160px;flex:none"
+          oninput="salBuildRows('local')">
+        <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
+      </div>
+      <div id="local-table-wrap"
+        style="max-height:320px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--bg)">
+              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
+              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
+              <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
+            </tr>
+          </thead>
+          <tbody id="local-tbody"></tbody>
+        </table>
+        <div id="local-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
+          Upar month select karein
+        </div>
+      </div>
+      <div id="local-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">Total Amount</span>
+          <span id="local-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+          <span style="font-size:11px;color:var(--muted)">Non-zero entries</span>
+          <span id="local-entry-count" style="font-size:12px;font-weight:700;color:var(--text)">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── BULK SUPPLY ── -->
+    <div id="sal-panel-supply" style="display:none">
+      <div style="padding:10px 16px;background:var(--green-l);border-bottom:1px solid var(--border);
+                  font-size:12px;color:var(--green-d);font-weight:600">
+        <i class="fas fa-truck" style="margin-right:6px"></i>SUPPLY SALE — Month-wise date-by-date entry
+      </div>
+      <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
+        <input class="form-input" type="month" id="supply-month" style="width:160px;flex:none"
+          oninput="salBuildRows('supply')">
+        <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
+      </div>
+      <div id="supply-table-wrap"
+        style="max-height:320px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:var(--bg)">
+              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
+              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
+              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
+              <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
+            </tr>
+          </thead>
+          <tbody id="supply-tbody"></tbody>
+        </table>
+        <div id="supply-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
+          Upar month select karein
+        </div>
+      </div>
+      <div id="supply-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--muted)">Total Amount</span>
+          <span id="supply-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+          <span style="font-size:11px;color:var(--muted)">Non-zero entries</span>
+          <span id="supply-entry-count" style="font-size:12px;font-weight:700;color:var(--text)">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
     <div class="modal-ft">
-      <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
-      <button class="btn btn-green btn-sm" id="sal-save" onclick="saveSaleEntry()">
-        <i class="fas fa-save"></i> Save Entry
-      </button>
+      <div id="sal-ft-single" style="display:flex;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
+        <button class="btn btn-green btn-sm" id="sal-save" onclick="saveSaleEntry()">
+          <i class="fas fa-save"></i> Save Entry
+        </button>
+      </div>
+      <div id="sal-ft-local" style="display:none;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
+        <button class="btn btn-green btn-sm" id="local-save-btn" onclick="saveBulkSale('local')">
+          <i class="fas fa-upload"></i> Save LOCAL Entries
+        </button>
+      </div>
+      <div id="sal-ft-supply" style="display:none;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
+        <button class="btn btn-green btn-sm" id="supply-save-btn" onclick="saveBulkSale('supply')">
+          <i class="fas fa-upload"></i> Save SUPPLY Entries
+        </button>
+      </div>
     </div>
   </div>
 </div>
