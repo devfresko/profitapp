@@ -1744,19 +1744,22 @@ function purTab(tab) {
 
 /* ═══════════════════════════════════════════════════════════
    PDF.js SETUP
-   pdf.js library se browser mein directly PDF read karte hain
-   without any server — completely client side
 ═══════════════════════════════════════════════════════════ */
 (function() {
-  // Set worker path for PDF.js
   if (typeof pdfjsLib !== 'undefined') {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 })();
 
-// ── Generic PDF text extractor ──
-// Returns Promise<string> — full text of all pages concatenated
+/* ── PDF Line Extractor (pdfplumber-style y-position grouping) ──
+   PDF.js getTextContent() returns individual words with x,y coords.
+   We group words by their y-position (within 3pt tolerance) to
+   reconstruct proper lines — same approach as Python's pdfplumber.
+   This correctly rebuilds "DATE TOTAL... 6230 6253.65 266556.28 267061.53"
+   as a single line instead of scattered tokens.
+   Returns Promise<string> — all pages text joined with newlines.
+*/
 function _extractPDFText(file, onProgress) {
   return new Promise(function(resolve, reject) {
     if (typeof pdfjsLib === 'undefined') {
@@ -1767,29 +1770,47 @@ function _extractPDFText(file, onProgress) {
     var reader = new FileReader();
     reader.onload = function(e) {
       var typedArray = new Uint8Array(e.target.result);
+
       pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
         var totalPages = pdf.numPages;
-        var pageTexts  = [];
-        var promises   = [];
+        var allPageTexts = new Array(totalPages);
+        var pagePromises = [];
 
-        for (var i = 1; i <= totalPages; i++) {
+        for (var pn = 1; pn <= totalPages; pn++) {
           (function(pageNum) {
-            promises.push(
-              pdf.getPage(pageNum).then(function(page) {
-                return page.getTextContent();
-              }).then(function(content) {
-                var text = content.items.map(function(item) {
-                  return item.str;
-                }).join(' ');
-                pageTexts[pageNum - 1] = text;
-                if (onProgress) onProgress(pageNum, totalPages);
-              })
-            );
-          })(i);
+            var p = pdf.getPage(pageNum).then(function(page) {
+              return page.getTextContent({ normalizeWhitespace: false });
+            }).then(function(content) {
+
+              // Group items by rounded y-position (3pt tolerance)
+              var byY = {};
+              content.items.forEach(function(item) {
+                if (!item.str || !item.str.trim()) return;
+                var y = Math.round(item.transform[5] / 3) * 3; // round to 3pt
+                if (!byY[y]) byY[y] = [];
+                byY[y].push({ x: item.transform[4], text: item.str.trim() });
+              });
+
+              // Sort y-positions descending (PDF y=0 is bottom, page top = largest y)
+              var ys = Object.keys(byY).map(Number).sort(function(a,b){ return b-a; });
+
+              // Build lines: sort words in each y-group by x-position
+              var lines = ys.map(function(y) {
+                return byY[y]
+                  .sort(function(a,b){ return a.x - b.x; })
+                  .map(function(w){ return w.text; })
+                  .join(' ');
+              });
+
+              allPageTexts[pageNum - 1] = lines.join('\n');
+              if (onProgress) onProgress(pageNum, totalPages);
+            });
+            pagePromises.push(p);
+          })(pn);
         }
 
-        Promise.all(promises).then(function() {
-          resolve(pageTexts.join('\n'));
+        Promise.all(pagePromises).then(function() {
+          resolve(allPageTexts.join('\n'));
         }).catch(reject);
 
       }).catch(function(err) {
@@ -1839,65 +1860,40 @@ function _processPurchasePDF(file) {
 }
 
 function _parsePurchaseText(rawText, fileName) {
-  // PDF.js spaces words — we need to reconstruct lines
-  // Strategy: split on newlines first, then also look for DATE TOTAL pattern
-  // PDF.js often merges lines — so we look for pattern anywhere in the text
-
-  // Normalize: replace multiple spaces with single
-  var text  = rawText.replace(/\s{2,}/g, ' ');
-  var lines = text.split('\n');
-
+  var lines    = rawText.split('\n');
   var results  = [];
   var lastDate = null;
-  var dateRe   = /(\d{2})\/(\d{2})\/(\d{4})/g;
-  var totalRe  = /DATE\s+TOTAL[\s\.,]+(\d[\d,]*)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/gi;
 
-  // Pass 1: find all dates in order
-  // Pass 2: find all DATE TOTAL entries and associate with preceding date
-  // We work on the full raw text for more robustness
+  // DATE line: "01/05/2026 ITEM NAME" or "Date :- 01/05/2026" etc.
+  var dateRe   = /(\d{2})\/(\d{2})\/(\d{4})/;
+  // DATE TOTAL line (after y-position grouping reconstructed properly):
+  // "DATE TOTAL... 6230 6253.65 266556.28 267061.53"
+  // 4 numbers: qty  packwgt  amount  netAmount
+  var totalRe  = /DATE\s+TOTAL[.\s]+(\d[\d,]*)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)/i;
 
-  var allMatches = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
 
-  // Find all date occurrences with their index
-  var dMatch;
-  dateRe.lastIndex = 0;
-  while ((dMatch = dateRe.exec(text)) !== null) {
-    allMatches.push({
-      type: 'date',
-      idx:  dMatch.index,
-      date: dMatch[3] + '-' + dMatch[2] + '-' + dMatch[1] // YYYY-MM-DD
-    });
-  }
+    // Track last date seen on any line
+    var dm = line.match(dateRe);
+    if (dm) {
+      lastDate = dm[3] + '-' + dm[2] + '-' + dm[1]; // YYYY-MM-DD
+    }
 
-  // Find all DATE TOTAL occurrences
-  totalRe.lastIndex = 0;
-  var tMatch;
-  while ((tMatch = totalRe.exec(text)) !== null) {
-    allMatches.push({
-      type:   'total',
-      idx:    tMatch.index,
-      qty:    parseFloat(String(tMatch[1]).replace(/,/g, '')) || 0,
-      netAmt: parseFloat(String(tMatch[4]).replace(/,/g, '')) || 0
-    });
-  }
+    // Match DATE TOTAL line
+    var tm = line.match(totalRe);
+    if (tm && lastDate) {
+      var qty    = parseFloat(String(tm[1]).replace(/,/g, '')) || 0;
+      var netAmt = parseFloat(String(tm[4]).replace(/,/g, '')) || 0;
 
-  // Sort all matches by their index in text
-  allMatches.sort(function(a, b) { return a.idx - b.idx; });
+      if (netAmt <= 0) continue;
 
-  // Walk through: keep track of last seen date, associate with totals
-  var curDate = null;
-  for (var i = 0; i < allMatches.length; i++) {
-    var m = allMatches[i];
-    if (m.type === 'date') {
-      curDate = m.date;
-    } else if (m.type === 'total' && curDate && m.netAmt > 0) {
-      // Check duplicate
       var dup = false;
       for (var j = 0; j < results.length; j++) {
-        if (results[j].date === curDate) { dup = true; break; }
+        if (results[j].date === lastDate) { dup = true; break; }
       }
       if (!dup) {
-        results.push({ date: curDate, qty: Math.round(m.qty), netAmt: m.netAmt });
+        results.push({ date: lastDate, qty: Math.round(qty), netAmt: netAmt });
       }
     }
   }
@@ -1910,9 +1906,7 @@ function _parsePurchaseText(rawText, fileName) {
     return;
   }
 
-  // Sort by date
   results.sort(function(a, b) { return a.date.localeCompare(b.date); });
-
   _showPurchasePDFPreview(results, fileName);
 }
 
@@ -2046,62 +2040,47 @@ function _processSalePDF(file) {
 }
 
 function _parseSaleText(rawText, fileName) {
-  var text = rawText.replace(/\s{2,}/g, ' ');
-
+  var lines    = rawText.split('\n');
   var results  = [];
-  var dateRe   = /(\d{2})\/(\d{2})\/(\d{4})/g;
-  var totalRe  = /DATE\s+TOTAL[\s\.,]+(\d[\d,]*)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/gi;
-  // Detect party from surrounding text — look for LOCAL or SUPPLY keyword near DATE TOTAL
+  var lastDate = null;
+  var dateRe   = /(\d{2})\/(\d{2})\/(\d{4})/;
+  var totalRe  = /DATE\s+TOTAL[.\s]+(\d[\d,]*)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)\s+([\d,]+\.\d+)/i;
   var localRe  = /LOCAL[\s\-]?SALE/i;
   var supplyRe = /SUPPLY[\s\-]?SALE/i;
 
-  var allMatches = [];
+  var lastParty = 'LOCAL SALE'; // default
 
-  var dMatch;
-  dateRe.lastIndex = 0;
-  while ((dMatch = dateRe.exec(text)) !== null) {
-    allMatches.push({
-      type: 'date',
-      idx:  dMatch.index,
-      date: dMatch[3] + '-' + dMatch[2] + '-' + dMatch[1]
-    });
-  }
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
 
-  totalRe.lastIndex = 0;
-  var tMatch;
-  while ((tMatch = totalRe.exec(text)) !== null) {
-    // Look at context around this match to detect party type
-    var context = text.substring(Math.max(0, tMatch.index - 200), tMatch.index);
-    var party   = localRe.test(context) ? 'LOCAL SALE'
-                : supplyRe.test(context) ? 'SUPPLY SALE'
-                : 'LOCAL SALE'; // default
+    var dm = line.match(dateRe);
+    if (dm) lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
 
-    allMatches.push({
-      type:   'total',
-      idx:    tMatch.index,
-      qty:    parseFloat(String(tMatch[1]).replace(/,/g, '')) || 0,
-      netAmt: parseFloat(String(tMatch[4]).replace(/,/g, '')) || 0,
-      party:  party
-    });
-  }
+    // Track party type from surrounding context
+    if (localRe.test(line))  lastParty = 'LOCAL SALE';
+    if (supplyRe.test(line)) lastParty = 'SUPPLY SALE';
 
-  allMatches.sort(function(a, b) { return a.idx - b.idx; });
+    var tm = line.match(totalRe);
+    if (tm && lastDate) {
+      var qty    = parseFloat(String(tm[1]).replace(/,/g, '')) || 0;
+      var netAmt = parseFloat(String(tm[4]).replace(/,/g, '')) || 0;
+      if (netAmt <= 0) continue;
 
-  var curDate = null;
-  for (var i = 0; i < allMatches.length; i++) {
-    var m = allMatches[i];
-    if (m.type === 'date') {
-      curDate = m.date;
-    } else if (m.type === 'total' && curDate && m.netAmt > 0) {
-      // Allow same date with different party types
+      // Look back up to 50 lines for party context
+      var contextParty = 'LOCAL SALE';
+      for (var k = Math.max(0, i-50); k < i; k++) {
+        if (localRe.test(lines[k]))  contextParty = 'LOCAL SALE';
+        if (supplyRe.test(lines[k])) contextParty = 'SUPPLY SALE';
+      }
+
       var dup = false;
       for (var j = 0; j < results.length; j++) {
-        if (results[j].date === curDate && results[j].party === m.party) {
+        if (results[j].date === lastDate && results[j].party === contextParty) {
           dup = true; break;
         }
       }
       if (!dup) {
-        results.push({ date: curDate, qty: Math.round(m.qty), netAmt: m.netAmt, party: m.party });
+        results.push({ date: lastDate, qty: Math.round(qty), netAmt: netAmt, party: contextParty });
       }
     }
   }
@@ -2110,7 +2089,7 @@ function _parseSaleText(rawText, fileName) {
 
   if (!results.length) {
     document.getElementById('sal-pdf-dropzone').style.display = '';
-    toast('DATE TOTAL rows nahi mile. Sahi date-wise Sale PDF hai?', 'warning');
+    toast('DATE TOTAL rows nahi mile. Date-wise Sale PDF hai? (Challan Summary PDF kaam nahi karega)', 'warning');
     return;
   }
 
@@ -2118,7 +2097,6 @@ function _parseSaleText(rawText, fileName) {
     var dc = a.date.localeCompare(b.date);
     return dc !== 0 ? dc : a.party.localeCompare(b.party);
   });
-
   _showSalePDFPreview(results, fileName);
 }
 
