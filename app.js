@@ -1321,6 +1321,7 @@ function openModal(id) {
     document.getElementById('sal-date').value = today;
     document.getElementById('sal-qty').value  = '';
     document.getElementById('sal-amt').value  = '';
+    salPDFReset();
   } else if (id === 'm-exp') {
     document.getElementById('exp-amt').value  = '';
     _populateMonths();
@@ -1742,47 +1743,161 @@ function purTab(tab) {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PDF TEXT PARSER — extracts DATE TOTAL rows
-   Format in PDF: "DATE TOTAL... <qty> <packWgt> <amount> <netAmount>"
-   We capture: date (from nearest preceding DD/MM/YYYY line) + Net Amount (last col)
+   PDF.js SETUP
+   pdf.js library se browser mein directly PDF read karte hain
+   without any server — completely client side
+═══════════════════════════════════════════════════════════ */
+(function() {
+  // Set worker path for PDF.js
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+})();
+
+// ── Generic PDF text extractor ──
+// Returns Promise<string> — full text of all pages concatenated
+function _extractPDFText(file, onProgress) {
+  return new Promise(function(resolve, reject) {
+    if (typeof pdfjsLib === 'undefined') {
+      reject(new Error('PDF.js library load nahi hua. Internet check karein.'));
+      return;
+    }
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var typedArray = new Uint8Array(e.target.result);
+      pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
+        var totalPages = pdf.numPages;
+        var pageTexts  = [];
+        var promises   = [];
+
+        for (var i = 1; i <= totalPages; i++) {
+          (function(pageNum) {
+            promises.push(
+              pdf.getPage(pageNum).then(function(page) {
+                return page.getTextContent();
+              }).then(function(content) {
+                var text = content.items.map(function(item) {
+                  return item.str;
+                }).join(' ');
+                pageTexts[pageNum - 1] = text;
+                if (onProgress) onProgress(pageNum, totalPages);
+              })
+            );
+          })(i);
+        }
+
+        Promise.all(promises).then(function() {
+          resolve(pageTexts.join('\n'));
+        }).catch(reject);
+
+      }).catch(function(err) {
+        reject(new Error('PDF read nahi ho saka: ' + err.message));
+      });
+    };
+    reader.onerror = function() { reject(new Error('File read failed')); };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PURCHASE PDF — FILE UPLOAD HANDLER
 ═══════════════════════════════════════════════════════════ */
 var _pdfParsed = [];
 
-function parsePurchasePDF() {
-  var raw = document.getElementById('pdf-text-input').value.trim();
-  if (!raw) { toast('Pehle PDF text paste karein', 'warning'); return; }
+function handlePDFDrop(event) {
+  var file = event.dataTransfer.files[0];
+  if (file) _processPurchasePDF(file);
+}
 
-  var lines   = raw.split('\n').map(function(l) { return l.trim(); });
-  var results = [];
+function handlePDFFileSelect(input) {
+  var file = input.files[0];
+  if (file) _processPurchasePDF(file);
+}
+
+function _processPurchasePDF(file) {
+  if (!file || file.type !== 'application/pdf') {
+    toast('Sirf PDF file select karein', 'warning'); return;
+  }
+
+  // Show loading
+  document.getElementById('pdf-dropzone').style.display  = 'none';
+  document.getElementById('pdf-loading').style.display   = '';
+  document.getElementById('pdf-loading-text').textContent = 'PDF read ho raha hai… (' + file.name + ')';
+
+  _extractPDFText(file, function(page, total) {
+    document.getElementById('pdf-loading-page').textContent = 'Page ' + page + ' / ' + total;
+  }).then(function(text) {
+    document.getElementById('pdf-loading').style.display = 'none';
+    _parsePurchaseText(text, file.name);
+  }).catch(function(err) {
+    document.getElementById('pdf-loading').style.display  = 'none';
+    document.getElementById('pdf-dropzone').style.display = '';
+    toast('❌ ' + err.message, 'error');
+  });
+}
+
+function _parsePurchaseText(rawText, fileName) {
+  // PDF.js spaces words — we need to reconstruct lines
+  // Strategy: split on newlines first, then also look for DATE TOTAL pattern
+  // PDF.js often merges lines — so we look for pattern anywhere in the text
+
+  // Normalize: replace multiple spaces with single
+  var text  = rawText.replace(/\s{2,}/g, ' ');
+  var lines = text.split('\n');
+
+  var results  = [];
   var lastDate = null;
+  var dateRe   = /(\d{2})\/(\d{2})\/(\d{4})/g;
+  var totalRe  = /DATE\s+TOTAL[\s\.,]+(\d[\d,]*)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/gi;
 
-  var dateRe  = /^(\d{2})\/(\d{2})\/(\d{4})/;
-  var totalRe = /^DATE\s+TOTAL[\.\s,]+([\d,]+)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/i;
+  // Pass 1: find all dates in order
+  // Pass 2: find all DATE TOTAL entries and associate with preceding date
+  // We work on the full raw text for more robustness
 
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
+  var allMatches = [];
 
-    // Capture latest date seen
-    var dm = line.match(dateRe);
-    if (dm) {
-      lastDate = dm[3] + '-' + dm[2] + '-' + dm[1]; // YYYY-MM-DD
-    }
+  // Find all date occurrences with their index
+  var dMatch;
+  dateRe.lastIndex = 0;
+  while ((dMatch = dateRe.exec(text)) !== null) {
+    allMatches.push({
+      type: 'date',
+      idx:  dMatch.index,
+      date: dMatch[3] + '-' + dMatch[2] + '-' + dMatch[1] // YYYY-MM-DD
+    });
+  }
 
-    // Capture DATE TOTAL line
-    var tm = line.match(totalRe);
-    if (tm && lastDate) {
-      var qty    = parseFloat(String(tm[1]).replace(/,/g, '')) || 0;
-      var netAmt = parseFloat(String(tm[4]).replace(/,/g, '')) || 0;
+  // Find all DATE TOTAL occurrences
+  totalRe.lastIndex = 0;
+  var tMatch;
+  while ((tMatch = totalRe.exec(text)) !== null) {
+    allMatches.push({
+      type:   'total',
+      idx:    tMatch.index,
+      qty:    parseFloat(String(tMatch[1]).replace(/,/g, '')) || 0,
+      netAmt: parseFloat(String(tMatch[4]).replace(/,/g, '')) || 0
+    });
+  }
 
-      if (netAmt <= 0) continue;
+  // Sort all matches by their index in text
+  allMatches.sort(function(a, b) { return a.idx - b.idx; });
 
-      // Deduplicate same date
+  // Walk through: keep track of last seen date, associate with totals
+  var curDate = null;
+  for (var i = 0; i < allMatches.length; i++) {
+    var m = allMatches[i];
+    if (m.type === 'date') {
+      curDate = m.date;
+    } else if (m.type === 'total' && curDate && m.netAmt > 0) {
+      // Check duplicate
       var dup = false;
       for (var j = 0; j < results.length; j++) {
-        if (results[j].date === lastDate) { dup = true; break; }
+        if (results[j].date === curDate) { dup = true; break; }
       }
       if (!dup) {
-        results.push({ date: lastDate, qty: Math.round(qty), netAmt: netAmt });
+        results.push({ date: curDate, qty: Math.round(m.qty), netAmt: m.netAmt });
       }
     }
   }
@@ -1790,20 +1905,24 @@ function parsePurchasePDF() {
   _pdfParsed = results;
 
   if (!results.length) {
-    toast('Koi DATE TOTAL row nahi mila. PDF text sahi paste hua?', 'warning');
+    document.getElementById('pdf-dropzone').style.display = '';
+    toast('DATE TOTAL rows nahi mile. Sahi Purchase Register PDF hai?', 'warning');
     return;
   }
 
-  // Sort by date ascending
+  // Sort by date
   results.sort(function(a, b) { return a.date.localeCompare(b.date); });
 
-  // Build preview table
+  _showPurchasePDFPreview(results, fileName);
+}
+
+function _showPurchasePDFPreview(results, fileName) {
   var totalAmt = 0, totalQty = 0;
   var trows = results.map(function(r, i) {
     totalAmt += r.netAmt;
     totalQty += r.qty;
     return '<tr style="border-top:1px solid var(--border)">'
-      + '<td style="padding:7px 10px;font-size:11px;color:var(--sub);width:30px">' + (i+1) + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;color:var(--sub);width:28px">' + (i+1) + '</td>'
       + '<td style="padding:7px 10px;font-weight:600;font-size:12px;white-space:nowrap">' + fmtD(r.date) + '</td>'
       + '<td style="padding:7px 10px;font-size:12px;color:var(--muted);text-align:right">' + r.qty.toLocaleString('en-IN') + '</td>'
       + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--red)">₹' + fmt(r.netAmt) + '</td>'
@@ -1817,34 +1936,36 @@ function parsePurchasePDF() {
     + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted)">Date</th>'
     + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Qty (kg)</th>'
     + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Net Amount</th>'
-    + '</tr></thead>'
-    + '<tbody>' + trows + '</tbody>'
-    + '</table>';
+    + '</tr></thead><tbody>' + trows + '</tbody></table>';
 
-  document.getElementById('pdf-found-count').textContent = results.length;
-  document.getElementById('pdf-total-amt').textContent   = '₹' + fmt(totalAmt);
-  document.getElementById('pdf-total-qty').textContent   = totalQty.toLocaleString('en-IN') + ' kg';
+  document.getElementById('pdf-found-count').textContent  = results.length;
+  document.getElementById('pdf-total-amt').textContent    = '₹' + fmt(totalAmt);
+  document.getElementById('pdf-total-qty').textContent    = totalQty.toLocaleString('en-IN') + ' kg';
+  document.getElementById('pdf-file-name').textContent    = fileName || '';
 
-  // Show step 2
-  document.getElementById('pdf-step-1').style.display  = 'none';
-  document.getElementById('pdf-step-2').style.display  = '';
+  document.getElementById('pdf-step-1').style.display   = 'none';
+  document.getElementById('pdf-step-2').style.display   = '';
   document.getElementById('pdf-import-btn').style.display = '';
 }
 
 function pdfReset() {
   _pdfParsed = [];
-  var ta = document.getElementById('pdf-text-input');
-  if (ta) ta.value = '';
+  var fi = document.getElementById('pdf-file-input');
+  if (fi) fi.value = '';
+  var dz = document.getElementById('pdf-dropzone');
+  var ld = document.getElementById('pdf-loading');
   var s1 = document.getElementById('pdf-step-1');
   var s2 = document.getElementById('pdf-step-2');
   var ib = document.getElementById('pdf-import-btn');
+  if (dz) dz.style.display = '';
+  if (ld) ld.style.display = 'none';
   if (s1) s1.style.display = '';
   if (s2) s2.style.display = 'none';
   if (ib) ib.style.display = 'none';
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PDF BULK IMPORT — sends parsed entries to GAS bulkSavePurchase
+   PURCHASE PDF BULK IMPORT → GAS bulkSavePurchase
 ═══════════════════════════════════════════════════════════ */
 function importPurchasePDF() {
   if (!_pdfParsed.length) { toast('Koi entries nahi hain', 'warning'); return; }
@@ -1854,10 +1975,7 @@ function importPurchasePDF() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…'; }
   _busy = true;
 
-  var entries = _pdfParsed.map(function(r) {
-    return { date: r.date, qty: r.qty, amount: r.netAmt };
-  });
-
+  var entries  = _pdfParsed.map(function(r) { return { date: r.date, qty: r.qty, amount: r.netAmt }; });
   var totalAmt = entries.reduce(function(s, e) { return s + e.amount; }, 0);
 
   _api('bulkSavePurchase', { entries: entries },
@@ -1874,8 +1992,224 @@ function importPurchasePDF() {
           + '📅 *Entries:* ' + (r.saved || entries.length) + ' din\n'
           + '💰 *Total:* ₹' + fmt(totalAmt) + '\n'
           + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n_Fresko P&L Tracker_'
+        );
+        _loadData(false);
+      } else {
+        toast('❌ ' + ((r && r.error) || 'Import failed'), 'error');
+      }
+    },
+    function(e) {
+      _busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries'; }
+      toast('❌ ' + (e.message || 'Network error'), 'error');
+    }
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SALE PDF — FILE UPLOAD HANDLER
+   Sale PDF format: DATE TOTAL rows with party type mention
+   Parser looks for: party keyword (LOCAL/SUPPLY) before DATE TOTAL
+═══════════════════════════════════════════════════════════ */
+var _salePDFParsed = [];
+
+function handleSalePDFDrop(event) {
+  var file = event.dataTransfer.files[0];
+  if (file) _processSalePDF(file);
+}
+
+function handleSalePDFSelect(input) {
+  var file = input.files[0];
+  if (file) _processSalePDF(file);
+}
+
+function _processSalePDF(file) {
+  if (!file || file.type !== 'application/pdf') {
+    toast('Sirf PDF file select karein', 'warning'); return;
+  }
+
+  document.getElementById('sal-pdf-dropzone').style.display  = 'none';
+  document.getElementById('sal-pdf-loading').style.display   = '';
+  document.getElementById('sal-pdf-loading-text').textContent = 'PDF read ho raha hai… (' + file.name + ')';
+
+  _extractPDFText(file, function(page, total) {
+    document.getElementById('sal-pdf-loading-page').textContent = 'Page ' + page + ' / ' + total;
+  }).then(function(text) {
+    document.getElementById('sal-pdf-loading').style.display = 'none';
+    _parseSaleText(text, file.name);
+  }).catch(function(err) {
+    document.getElementById('sal-pdf-loading').style.display  = 'none';
+    document.getElementById('sal-pdf-dropzone').style.display = '';
+    toast('❌ ' + err.message, 'error');
+  });
+}
+
+function _parseSaleText(rawText, fileName) {
+  var text = rawText.replace(/\s{2,}/g, ' ');
+
+  var results  = [];
+  var dateRe   = /(\d{2})\/(\d{2})\/(\d{4})/g;
+  var totalRe  = /DATE\s+TOTAL[\s\.,]+(\d[\d,]*)\s+([\d,\.]+)\s+([\d,\.]+)\s+([\d,\.]+)/gi;
+  // Detect party from surrounding text — look for LOCAL or SUPPLY keyword near DATE TOTAL
+  var localRe  = /LOCAL[\s\-]?SALE/i;
+  var supplyRe = /SUPPLY[\s\-]?SALE/i;
+
+  var allMatches = [];
+
+  var dMatch;
+  dateRe.lastIndex = 0;
+  while ((dMatch = dateRe.exec(text)) !== null) {
+    allMatches.push({
+      type: 'date',
+      idx:  dMatch.index,
+      date: dMatch[3] + '-' + dMatch[2] + '-' + dMatch[1]
+    });
+  }
+
+  totalRe.lastIndex = 0;
+  var tMatch;
+  while ((tMatch = totalRe.exec(text)) !== null) {
+    // Look at context around this match to detect party type
+    var context = text.substring(Math.max(0, tMatch.index - 200), tMatch.index);
+    var party   = localRe.test(context) ? 'LOCAL SALE'
+                : supplyRe.test(context) ? 'SUPPLY SALE'
+                : 'LOCAL SALE'; // default
+
+    allMatches.push({
+      type:   'total',
+      idx:    tMatch.index,
+      qty:    parseFloat(String(tMatch[1]).replace(/,/g, '')) || 0,
+      netAmt: parseFloat(String(tMatch[4]).replace(/,/g, '')) || 0,
+      party:  party
+    });
+  }
+
+  allMatches.sort(function(a, b) { return a.idx - b.idx; });
+
+  var curDate = null;
+  for (var i = 0; i < allMatches.length; i++) {
+    var m = allMatches[i];
+    if (m.type === 'date') {
+      curDate = m.date;
+    } else if (m.type === 'total' && curDate && m.netAmt > 0) {
+      // Allow same date with different party types
+      var dup = false;
+      for (var j = 0; j < results.length; j++) {
+        if (results[j].date === curDate && results[j].party === m.party) {
+          dup = true; break;
+        }
+      }
+      if (!dup) {
+        results.push({ date: curDate, qty: Math.round(m.qty), netAmt: m.netAmt, party: m.party });
+      }
+    }
+  }
+
+  _salePDFParsed = results;
+
+  if (!results.length) {
+    document.getElementById('sal-pdf-dropzone').style.display = '';
+    toast('DATE TOTAL rows nahi mile. Sahi date-wise Sale PDF hai?', 'warning');
+    return;
+  }
+
+  results.sort(function(a, b) {
+    var dc = a.date.localeCompare(b.date);
+    return dc !== 0 ? dc : a.party.localeCompare(b.party);
+  });
+
+  _showSalePDFPreview(results, fileName);
+}
+
+function _showSalePDFPreview(results, fileName) {
+  var localTotal = 0, supplyTotal = 0;
+
+  var trows = results.map(function(r, i) {
+    if (r.party === 'LOCAL SALE')  localTotal  += r.netAmt;
+    else                           supplyTotal += r.netAmt;
+
+    var partyColor = r.party === 'LOCAL SALE' ? 'var(--red)' : 'var(--green)';
+    var partyBg    = r.party === 'LOCAL SALE' ? 'var(--red-l)' : 'var(--green-l)';
+
+    return '<tr style="border-top:1px solid var(--border)">'
+      + '<td style="padding:6px 8px;font-size:11px;color:var(--sub);width:26px">' + (i+1) + '</td>'
+      + '<td style="padding:6px 8px;font-weight:600;font-size:11px;white-space:nowrap">' + fmtD(r.date) + '</td>'
+      + '<td style="padding:6px 8px">'
+      + '<span style="background:' + partyBg + ';color:' + partyColor + ';padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700">' + r.party + '</span>'
+      + '</td>'
+      + '<td style="padding:6px 8px;font-size:11px;color:var(--muted);text-align:right">' + r.qty.toLocaleString('en-IN') + '</td>'
+      + '<td style="padding:6px 8px;font-weight:700;font-size:11px;text-align:right;color:' + partyColor + '">₹' + fmt(r.netAmt) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  document.getElementById('sal-pdf-preview-table').innerHTML =
+    '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="background:var(--bg)">'
+    + '<th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--muted)">#</th>'
+    + '<th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--muted)">Date</th>'
+    + '<th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--muted)">Party</th>'
+    + '<th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--muted)">Qty</th>'
+    + '<th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--muted)">Net Amount</th>'
+    + '</tr></thead><tbody>' + trows + '</tbody></table>';
+
+  document.getElementById('sal-pdf-found-count').textContent  = results.length;
+  document.getElementById('sal-pdf-local-total').textContent  = '₹' + fmt(localTotal);
+  document.getElementById('sal-pdf-supply-total').textContent = '₹' + fmt(supplyTotal);
+  document.getElementById('sal-pdf-file-name').textContent    = fileName || '';
+
+  document.getElementById('sal-pdf-step-1').style.display    = 'none';
+  document.getElementById('sal-pdf-step-2').style.display    = '';
+  document.getElementById('sal-pdf-import-btn').style.display = '';
+}
+
+function salPDFReset() {
+  _salePDFParsed = [];
+  var fi = document.getElementById('sal-pdf-file-input');
+  if (fi) fi.value = '';
+  var dz = document.getElementById('sal-pdf-dropzone');
+  var ld = document.getElementById('sal-pdf-loading');
+  var s1 = document.getElementById('sal-pdf-step-1');
+  var s2 = document.getElementById('sal-pdf-step-2');
+  var ib = document.getElementById('sal-pdf-import-btn');
+  if (dz) dz.style.display = '';
+  if (ld) ld.style.display = 'none';
+  if (s1) s1.style.display = '';
+  if (s2) s2.style.display = 'none';
+  if (ib) ib.style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SALE PDF BULK IMPORT → GAS bulkSaveSale
+═══════════════════════════════════════════════════════════ */
+function importSalePDF() {
+  if (!_salePDFParsed.length) { toast('Koi entries nahi hain', 'warning'); return; }
+  if (_busy) return;
+
+  var btn = document.getElementById('sal-pdf-import-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…'; }
+  _busy = true;
+
+  var entries  = _salePDFParsed.map(function(r) {
+    return { date: r.date, party: r.party, qty: r.qty, amount: r.netAmt };
+  });
+  var totalAmt = entries.reduce(function(s, e) { return s + e.amount; }, 0);
+
+  _api('bulkSaveSale', { entries: entries },
+    function(r) {
+      _busy = false;
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries'; }
+      if (r && r.success) {
+        closeModal('m-sal');
+        salPDFReset();
+        toast('✅ ' + (r.saved || entries.length) + ' sale entries import ho gayin!', 'success');
+        _waSend(WA_ADMIN_NUMBERS,
+          '🚚 *Fresko — Bulk Sale Import (PDF)*\n'
           + '━━━━━━━━━━━━━━━━━━\n'
-          + '_Fresko P&L Tracker_'
+          + '📅 *Entries:* ' + (r.saved || entries.length) + ' rows\n'
+          + '💰 *Total:* ₹' + fmt(totalAmt) + '\n'
+          + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
+          + '━━━━━━━━━━━━━━━━━━\n_Fresko P&L Tracker_'
         );
         _loadData(false);
       } else {
@@ -1894,14 +2228,15 @@ function importPurchasePDF() {
    SALE MODAL — TAB SWITCHING
 ═══════════════════════════════════════════════════════════ */
 function salTab(tab) {
-  var tabs = ['single', 'local', 'supply'];
+  var tabs   = ['single', 'pdf', 'local', 'supply'];
+  var colors = { single: 'var(--green)', pdf: 'var(--green)', local: 'var(--red)', supply: 'var(--green)' };
   tabs.forEach(function(t) {
     var btn    = document.getElementById('sal-tab-' + t);
     var panel  = document.getElementById('sal-panel-' + t);
     var ft     = document.getElementById('sal-ft-' + t);
     if (!btn) return;
     var active = t === tab;
-    var color  = t === 'local' ? 'var(--red)' : 'var(--green)';
+    var color  = colors[t] || 'var(--green)';
     btn.style.borderBottom = active ? '2px solid ' + color : '2px solid transparent';
     btn.style.color        = active ? color : 'var(--muted)';
     btn.style.fontWeight   = active ? '700' : '600';
