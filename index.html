@@ -21,6 +21,7 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -935,22 +936,43 @@
 
     <!-- ── PDF IMPORT TAB ── -->
     <div id="pur-panel-pdf" class="modal-body" style="display:none">
-      <div class="info-box blue" style="margin-bottom:14px">
-        <i class="fas fa-info-circle"></i>
-        <span>Accounting software se export hua Purchase Register PDF kholo → <strong>Ctrl+A</strong> → <strong>Ctrl+C</strong> → Neeche paste karo. App <strong>DATE TOTAL</strong> rows se date-wise entries automatically extract karega.</span>
-      </div>
 
-      <!-- Step 1: Paste textarea -->
+      <!-- Step 1: File Upload -->
       <div id="pdf-step-1">
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">PDF Text Yahan Paste Karein <span class="req">*</span></label>
-          <textarea id="pdf-text-input" class="form-input"
-            style="min-height:150px;font-size:11px;font-family:monospace;resize:vertical;line-height:1.4"
-            placeholder="PDF open karo → Ctrl+A → Ctrl+C → Yahan Ctrl+V karo&#10;&#10;App DATE TOTAL rows dhundh kar date-wise entries banayega automatically."></textarea>
+        <!-- Drop Zone -->
+        <div id="pdf-dropzone"
+          onclick="document.getElementById('pdf-file-input').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--red)';this.style.background='var(--red-l)'"
+          ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'"
+          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--bg)';handlePDFDrop(event)"
+          style="border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
+                 text-align:center;cursor:pointer;background:var(--bg);transition:all .2s;margin-bottom:14px">
+          <i class="fas fa-file-pdf" style="font-size:36px;color:var(--red);margin-bottom:10px;display:block"></i>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">
+            PDF File Yahan Drop Karein
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            ya click karke select karein
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:6px;background:var(--red);color:#fff;
+                      padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700">
+            <i class="fas fa-folder-open"></i> Browse File
+          </div>
+          <input type="file" id="pdf-file-input" accept=".pdf" style="display:none"
+            onchange="handlePDFFileSelect(this)">
         </div>
-        <button class="btn btn-primary btn-sm" onclick="parsePurchasePDF()" style="width:100%;padding:10px">
-          <i class="fas fa-magic" style="margin-right:6px"></i>Extract Date-wise Entries
-        </button>
+
+        <div class="info-box blue">
+          <i class="fas fa-info-circle"></i>
+          <span>Accounting software se export hua <strong>Purchase Register PDF</strong> upload karein. App <strong>DATE TOTAL</strong> rows se date-wise entries automatically extract karega.</span>
+        </div>
+
+        <!-- Loading state -->
+        <div id="pdf-loading" style="display:none;text-align:center;padding:20px">
+          <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--red);margin-bottom:8px;display:block"></i>
+          <div style="font-size:13px;font-weight:600;color:var(--text)" id="pdf-loading-text">PDF read ho raha hai…</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="pdf-loading-page">Page 0 / 0</div>
+        </div>
       </div>
 
       <!-- Step 2: Preview -->
@@ -960,18 +982,21 @@
             <i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>
             <span id="pdf-found-count">0</span> entries extract hue
           </span>
-          <button onclick="pdfReset()"
-            style="font-size:11px;color:var(--muted);border:none;background:none;cursor:pointer;text-decoration:underline">
-            ↩ Reset
-          </button>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="pdf-file-name" style="font-size:11px;color:var(--muted)"></span>
+            <button onclick="pdfReset()"
+              style="font-size:11px;color:var(--muted);border:none;background:none;cursor:pointer;text-decoration:underline">
+              ↩ Change File
+            </button>
+          </div>
         </div>
 
         <div id="pdf-preview-table"
           style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
-          <!-- filled by parsePurchasePDF() -->
         </div>
 
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--green-l);border:1px solid #A8DAB5;border-radius:8px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--green-l);
+                    border:1px solid #A8DAB5;border-radius:8px;margin-bottom:12px">
           <i class="fas fa-rupee-sign" style="color:var(--green);font-size:20px"></i>
           <div style="flex:1">
             <div style="font-size:11px;color:var(--muted)">Total Net Amount</div>
@@ -1010,7 +1035,7 @@
   </div>
 </div>
 
-<!-- Sales Modal — Single Entry + Bulk LOCAL + Bulk SUPPLY -->
+<!-- Sales Modal — Single Entry + PDF Upload + Bulk LOCAL + Bulk SUPPLY -->
 <div class="modal-overlay" id="m-sal">
   <div class="modal-box" style="max-width:640px;width:96vw">
     <div class="modal-hd">
@@ -1018,22 +1043,27 @@
       <button class="modal-close" onclick="closeModal('m-sal')"><i class="fas fa-times"></i></button>
     </div>
 
-    <!-- Tabs -->
+    <!-- Tabs — 4 tabs -->
     <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
       <button id="sal-tab-single" onclick="salTab('single')"
-        style="flex:1;padding:9px 4px;font-size:11px;font-weight:700;border:none;cursor:pointer;
+        style="flex:1;padding:9px 2px;font-size:10px;font-weight:700;border:none;cursor:pointer;
                border-bottom:2px solid var(--green);color:var(--green);background:transparent;transition:all .2s">
-        <i class="fas fa-pen" style="margin-right:4px"></i>Single Entry
+        <i class="fas fa-pen" style="display:block;margin:0 auto 2px;font-size:13px"></i>Single
+      </button>
+      <button id="sal-tab-pdf" onclick="salTab('pdf')"
+        style="flex:1;padding:9px 2px;font-size:10px;font-weight:600;border:none;cursor:pointer;
+               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
+        <i class="fas fa-file-pdf" style="display:block;margin:0 auto 2px;font-size:13px"></i>PDF Import
       </button>
       <button id="sal-tab-local" onclick="salTab('local')"
-        style="flex:1;padding:9px 4px;font-size:11px;font-weight:600;border:none;cursor:pointer;
+        style="flex:1;padding:9px 2px;font-size:10px;font-weight:600;border:none;cursor:pointer;
                border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
-        <i class="fas fa-store" style="margin-right:4px"></i>Bulk LOCAL
+        <i class="fas fa-store" style="display:block;margin:0 auto 2px;font-size:13px"></i>Bulk LOCAL
       </button>
       <button id="sal-tab-supply" onclick="salTab('supply')"
-        style="flex:1;padding:9px 4px;font-size:11px;font-weight:600;border:none;cursor:pointer;
+        style="flex:1;padding:9px 2px;font-size:10px;font-weight:600;border:none;cursor:pointer;
                border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
-        <i class="fas fa-truck" style="margin-right:4px"></i>Bulk SUPPLY
+        <i class="fas fa-truck" style="display:block;margin:0 auto 2px;font-size:13px"></i>Bulk SUPPLY
       </button>
     </div>
 
@@ -1059,6 +1089,82 @@
       <div class="form-group">
         <label class="form-label">Total Sales Amount (₹) <span class="req">*</span></label>
         <input class="form-input" type="number" id="sal-amt" placeholder="50400" min="0">
+      </div>
+    </div>
+
+    <!-- ── PDF IMPORT TAB (SALE) ── -->
+    <div id="sal-panel-pdf" class="modal-body" style="display:none">
+
+      <!-- Step 1: File Upload -->
+      <div id="sal-pdf-step-1">
+        <div id="sal-pdf-dropzone"
+          onclick="document.getElementById('sal-pdf-file-input').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--green)';this.style.background='var(--green-l)'"
+          ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'"
+          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--bg)';handleSalePDFDrop(event)"
+          style="border:2px dashed var(--border);border-radius:12px;padding:28px 20px;
+                 text-align:center;cursor:pointer;background:var(--bg);transition:all .2s;margin-bottom:14px">
+          <i class="fas fa-file-pdf" style="font-size:32px;color:var(--green);margin-bottom:8px;display:block"></i>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">
+            Sale PDF File Yahan Drop Karein
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">ya click karke select karein</div>
+          <div style="display:inline-flex;align-items:center;gap:6px;background:var(--green);color:#fff;
+                      padding:7px 16px;border-radius:8px;font-size:12px;font-weight:700">
+            <i class="fas fa-folder-open"></i> Browse File
+          </div>
+          <input type="file" id="sal-pdf-file-input" accept=".pdf" style="display:none"
+            onchange="handleSalePDFSelect(this)">
+        </div>
+
+        <div class="info-box blue">
+          <i class="fas fa-info-circle"></i>
+          <span>Accounting software se <strong>date-wise sale report PDF</strong> upload karein jisme <strong>DATE TOTAL</strong> rows hon aur <strong>party type</strong> (LOCAL/SUPPLY) mention ho. App automatically extract karega.</span>
+        </div>
+
+        <!-- Loading -->
+        <div id="sal-pdf-loading" style="display:none;text-align:center;padding:20px">
+          <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--green);margin-bottom:8px;display:block"></i>
+          <div style="font-size:13px;font-weight:600;color:var(--text)" id="sal-pdf-loading-text">PDF read ho raha hai…</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="sal-pdf-loading-page">Page 0 / 0</div>
+        </div>
+      </div>
+
+      <!-- Step 2: Preview -->
+      <div id="sal-pdf-step-2" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:700;color:var(--text)">
+            <i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>
+            <span id="sal-pdf-found-count">0</span> entries extract hue
+          </span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="sal-pdf-file-name" style="font-size:11px;color:var(--muted)"></span>
+            <button onclick="salPDFReset()"
+              style="font-size:11px;color:var(--muted);border:none;background:none;cursor:pointer;text-decoration:underline">
+              ↩ Change File
+            </button>
+          </div>
+        </div>
+
+        <div id="sal-pdf-preview-table"
+          style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+        </div>
+
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <div style="flex:1;padding:10px 14px;background:var(--red-l);border-radius:8px;text-align:center">
+            <div style="font-size:10px;color:var(--muted)">LOCAL SALE Total</div>
+            <div id="sal-pdf-local-total" style="font-size:15px;font-weight:800;color:var(--red)">₹0</div>
+          </div>
+          <div style="flex:1;padding:10px 14px;background:var(--green-l);border-radius:8px;text-align:center">
+            <div style="font-size:10px;color:var(--muted)">SUPPLY SALE Total</div>
+            <div id="sal-pdf-supply-total" style="font-size:15px;font-weight:800;color:var(--green)">₹0</div>
+          </div>
+        </div>
+
+        <div class="info-box amber">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>Preview confirm karein. Import ke baad dono party types ki entries sheet mein save ho jaayengi.</span>
+        </div>
       </div>
     </div>
 
@@ -1150,6 +1256,12 @@
         <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
         <button class="btn btn-green btn-sm" id="sal-save" onclick="saveSaleEntry()">
           <i class="fas fa-save"></i> Save Entry
+        </button>
+      </div>
+      <div id="sal-ft-pdf" style="display:none;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
+        <button class="btn btn-green btn-sm" id="sal-pdf-import-btn" onclick="importSalePDF()" style="display:none">
+          <i class="fas fa-upload"></i> Import All Entries
         </button>
       </div>
       <div id="sal-ft-local" style="display:none;gap:8px;width:100%;justify-content:flex-end">
