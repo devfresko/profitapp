@@ -1,5 +1,5 @@
 // Fresko P&L — Service Worker v2.0
-var CACHE_NAME = 'fresko-v2';
+var CACHE_NAME = 'fresko-v3';   // ← v2 se v3
 var SHELL = [
   './',
   './index.html',
