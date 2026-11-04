@@ -1193,14 +1193,30 @@
   </div>
 </div>
 
-<!-- Expenses Modal -->
+<!-- Expenses Modal — Manual + PDF Import -->
 <div class="modal-overlay" id="m-exp">
-  <div class="modal-box modal-sm">
+  <div class="modal-box" style="max-width:560px;width:96vw">
     <div class="modal-hd">
-      <div class="modal-title"><i class="fas fa-file-invoice-dollar" style="color:var(--amber)"></i> New Expense Entry</div>
+      <div class="modal-title"><i class="fas fa-file-invoice-dollar" style="color:var(--amber)"></i> Expense Entry</div>
       <button class="modal-close" onclick="closeModal('m-exp')"><i class="fas fa-times"></i></button>
     </div>
-    <div class="modal-body">
+
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
+      <button id="exp-tab-manual" onclick="expTab('manual')"
+        style="flex:1;padding:10px 6px;font-size:12px;font-weight:700;border:none;cursor:pointer;
+               border-bottom:2px solid var(--amber);color:var(--amber);background:transparent;transition:all .2s">
+        <i class="fas fa-pen" style="margin-right:5px"></i>Manual Entry
+      </button>
+      <button id="exp-tab-pdf" onclick="expTab('pdf')"
+        style="flex:1;padding:10px 6px;font-size:12px;font-weight:600;border:none;cursor:pointer;
+               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
+        <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
+      </button>
+    </div>
+
+    <!-- ── MANUAL TAB ── -->
+    <div id="exp-panel-manual" class="modal-body">
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Month <span class="req">*</span></label>
@@ -1212,11 +1228,86 @@
         </div>
       </div>
     </div>
+
+    <!-- ── PDF TAB ── -->
+    <div id="exp-panel-pdf" class="modal-body" style="display:none">
+      <div id="exp-pdf-step-1">
+        <div id="exp-pdf-dropzone"
+          onclick="document.getElementById('exp-pdf-file-input').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--amber)';this.style.background='var(--amber-l)'"
+          ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'"
+          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--bg)';handleExpensePDFDrop(event)"
+          style="border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
+                 text-align:center;cursor:pointer;background:var(--bg);transition:all .2s;margin-bottom:14px">
+          <i class="fas fa-file-pdf" style="font-size:36px;color:var(--amber);margin-bottom:10px;display:block"></i>
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">
+            Expense Voucher PDF Yahan Drop Karein
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">ya click karke select karein</div>
+          <div style="display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:#fff;
+                      padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700">
+            <i class="fas fa-folder-open"></i> Browse File
+          </div>
+          <input type="file" id="exp-pdf-file-input" accept=".pdf" style="display:none"
+            onchange="handleExpensePDFFileSelect(this)">
+        </div>
+        <div class="info-box blue">
+          <i class="fas fa-info-circle"></i>
+          <span>Accounting software se export hua <strong>Expense Voucher List PDF</strong> upload karein. App <strong>DATE TOTAL</strong> se daily debit extract karke month-wise total banayega.</span>
+        </div>
+        <div id="exp-pdf-loading" style="display:none;text-align:center;padding:20px">
+          <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--amber);margin-bottom:8px;display:block"></i>
+          <div style="font-size:13px;font-weight:600;color:var(--text)" id="exp-pdf-loading-text">PDF read ho raha hai…</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="exp-pdf-loading-page">Page 0 / 0</div>
+        </div>
+      </div>
+
+      <div id="exp-pdf-step-2" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:700;color:var(--text)">
+            <i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>
+            <span id="exp-pdf-found-count">0</span>
+          </span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span id="exp-pdf-file-name" style="font-size:11px;color:var(--muted)"></span>
+            <button onclick="expPdfReset()"
+              style="font-size:11px;color:var(--muted);border:none;background:none;cursor:pointer;text-decoration:underline">
+              ↩ Change File
+            </button>
+          </div>
+        </div>
+        <div id="exp-pdf-preview-table"
+          style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--amber-l);
+                    border:1px solid #FDE293;border-radius:8px;margin-bottom:12px">
+          <i class="fas fa-rupee-sign" style="color:var(--amber-d);font-size:20px"></i>
+          <div style="flex:1">
+            <div style="font-size:11px;color:var(--muted)">Total Expenses (Debit)</div>
+            <div id="exp-pdf-total-amt" style="font-size:17px;font-weight:800;color:var(--amber-d)">₹0</div>
+          </div>
+        </div>
+        <div class="info-box amber">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span>Preview check karein. Import ke baad month-wise entries sheet mein save ho jaayengi.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
     <div class="modal-ft">
-      <button class="btn btn-secondary btn-sm" onclick="closeModal('m-exp')">Cancel</button>
-      <button class="btn btn-amber btn-sm" id="exp-save" onclick="saveExpenseEntry()">
-        <i class="fas fa-save"></i> Save Entry
-      </button>
+      <div id="exp-ft-manual" style="display:flex;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-exp')">Cancel</button>
+        <button class="btn btn-amber btn-sm" id="exp-save" onclick="saveExpenseEntry()">
+          <i class="fas fa-save"></i> Save Entry
+        </button>
+      </div>
+      <div id="exp-ft-pdf" style="display:none;gap:8px;width:100%;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-exp')">Cancel</button>
+        <button class="btn btn-amber btn-sm" id="exp-pdf-import-btn" onclick="importExpensePDF()" style="display:none">
+          <i class="fas fa-upload"></i> Import All
+        </button>
+      </div>
     </div>
   </div>
 </div>
