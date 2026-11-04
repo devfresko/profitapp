@@ -1818,21 +1818,20 @@ function _purIsVendor(t) {
 }
 
 function _purPageItems(page) {
-  return page.getViewport({ scale: 1 }).then(function(vp) {
-    return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
-      .then(function(tc) {
-        var out = [];
-        tc.items.forEach(function(it) {
-          var s = it.str && it.str.trim();
-          if (s) out.push({
-            x: it.transform[4],
-            y: Math.round(vp.height - it.transform[5]),
-            text: s
-          });
+  var vp = page.getViewport({ scale: 1 });
+  return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
+    .then(function(tc) {
+      var out = [];
+      tc.items.forEach(function(it) {
+        var s = it.str && it.str.trim();
+        if (s) out.push({
+          x: it.transform[4],
+          y: Math.round(vp.height - it.transform[5]),
+          text: s
         });
-        return out;
       });
-  });
+      return out;
+    });
 }
 
 function _purGrpY(items) {
@@ -2368,84 +2367,70 @@ function _expParseAll(pdf, onProgress) {
     if (pageNum > total) return Promise.resolve(results);
     if (onProgress) onProgress(pageNum, total);
 
-    return pdf.getPage(pageNum).then(function(page) {
-      return page.getViewport({ scale: 1 }).then(function(vp) {
-        return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
-          .then(function(tc) {
-            // Group by Y
-            var byY = {};
-            tc.items.forEach(function(it) {
-              var s = it.str && it.str.trim();
-              if (!s) return;
-              var y = Math.round(vp.height - it.transform[5]);
-              // cluster within 3pt
-              var key = null;
-              Object.keys(byY).forEach(function(k) {
-                if (Math.abs(Number(k) - y) <= 3) key = k;
-              });
-              if (key === null) key = String(y);
-              if (!byY[key]) byY[key] = [];
-              byY[key].push({ x: it.transform[4], text: s });
-            });
-
-            var ys = Object.keys(byY).map(Number).sort(function(a, b) { return a - b; });
-            ys.forEach(function(y) {
-              var row = byY[String(y)] || byY[y];
-              if (!row) {
-                // find closest key
-                Object.keys(byY).forEach(function(k) {
-                  if (Math.abs(Number(k) - y) <= 3) row = byY[k];
-                });
-              }
-              if (!row) return;
-              row.sort(function(a, b) { return a.x - b.x; });
-              var line = row.map(function(r) { return r.text; }).join(' ');
-
-              // Track date
-              var dm = line.match(dateRe);
-              if (dm && !/DATE\s*TOTAL/i.test(line) && !/GRAND/i.test(line)) {
-                lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
-              }
-
-              // DATE TOTAL row
-              if (/DATE\s*TOTAL/i.test(line) && lastDate) {
-                // Collect numbers from this row sorted by X
-                // In Expense PDF: left number under DEBIT, right under CREDIT
-                // Visual: DEBIT is larger (expenses), CREDIT is smaller
-                var nums = [];
-                row.forEach(function(r) {
-                  var v = parseFloat(r.text.replace(/,/g, ''));
-                  if (!isNaN(v) && v >= 0 && /[\d.]/.test(r.text)) {
-                    nums.push({ x: r.x, v: v });
-                  }
-                });
-                nums.sort(function(a, b) { return a.x - b.x; });
-
-                // Take the LEFTMOST significant number as Debit
-                // (Debit column is left of Credit in the table)
-                // Fallback: largest number
-                var debit = 0;
-                if (nums.length >= 2) {
-                  // Two numbers: left=Debit, right=Credit (based on column layout)
-                  // BUT sometimes Credit appears first in text if x-positions vary
-                  // Safer: Debit is almost always the LARGER value for daily expense
-                  debit = Math.max(nums[0].v, nums[1].v);
-                } else if (nums.length === 1) {
-                  debit = nums[0].v;
-                }
-
-                if (debit > 0) {
-                  var dup = results.some(function(r) { return r.date === lastDate; });
-                  if (!dup) {
-                    results.push({ date: lastDate, debit: debit });
-                  }
-                }
-              }
-            });
-            return nextPage();
-          });
+return pdf.getPage(pageNum).then(function(page) {
+  var vp = page.getViewport({ scale: 1 });
+  return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
+    .then(function(tc) {
+      // Group by Y
+      var byY = {};
+      tc.items.forEach(function(it) {
+        var s = it.str && it.str.trim();
+        if (!s) return;
+        var y = Math.round(vp.height - it.transform[5]);
+        var key = null;
+        Object.keys(byY).forEach(function(k) {
+          if (Math.abs(Number(k) - y) <= 3) key = k;
+        });
+        if (key === null) key = String(y);
+        if (!byY[key]) byY[key] = [];
+        byY[key].push({ x: it.transform[4], text: s });
       });
+
+      var ys = Object.keys(byY).map(Number).sort(function(a, b) { return a - b; });
+      ys.forEach(function(y) {
+        var row = byY[String(y)] || byY[y];
+        if (!row) {
+          Object.keys(byY).forEach(function(k) {
+            if (Math.abs(Number(k) - y) <= 3) row = byY[k];
+          });
+        }
+        if (!row) return;
+        row.sort(function(a, b) { return a.x - b.x; });
+        var line = row.map(function(r) { return r.text; }).join(' ');
+
+        var dm = line.match(dateRe);
+        if (dm && !/DATE\s*TOTAL/i.test(line) && !/GRAND/i.test(line)) {
+          lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
+        }
+
+        if (/DATE\s*TOTAL/i.test(line) && lastDate) {
+          var nums = [];
+          row.forEach(function(r) {
+            var v = parseFloat(r.text.replace(/,/g, ''));
+            if (!isNaN(v) && v >= 0 && /[\d.]/.test(r.text)) {
+              nums.push({ x: r.x, v: v });
+            }
+          });
+          nums.sort(function(a, b) { return a.x - b.x; });
+
+          var debit = 0;
+          if (nums.length >= 2) {
+            debit = Math.max(nums[0].v, nums[1].v);
+          } else if (nums.length === 1) {
+            debit = nums[0].v;
+          }
+
+          if (debit > 0) {
+            var dup = results.some(function(r) { return r.date === lastDate; });
+            if (!dup) {
+              results.push({ date: lastDate, debit: debit });
+            }
+          }
+        }
+      });
+      return nextPage();
     });
+});
   }
   return nextPage();
 }
