@@ -1800,8 +1800,10 @@ function _purParseDateTotals(pdf, onProgress) {
   var total = pdf.numPages;
   var lastDate = null;
   var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
+  var grandQty = 0;
+  var grandNet = 0;
 
-  // Column X bands (stable across all 85 pages)
+  // Column X bands (stable)
   var COL = {
     qty:  { min: 240, max: 275 },
     wgt:  { min: 310, max: 360 },
@@ -1811,7 +1813,12 @@ function _purParseDateTotals(pdf, onProgress) {
 
   function nextPage() {
     pageNum++;
-    if (pageNum > total) return Promise.resolve(results);
+    if (pageNum > total) {
+      // Attach grand totals for later correction
+      results._grandQty = grandQty;
+      results._grandNet = grandNet;
+      return Promise.resolve(results);
+    }
     if (onProgress) onProgress(pageNum, total);
 
     return pdf.getPage(pageNum).then(function(page) {
@@ -1820,7 +1827,6 @@ function _purParseDateTotals(pdf, onProgress) {
         normalizeWhitespace: false,
         disableCombineTextItems: true
       }).then(function(tc) {
-        // Group by Y (2pt tolerance), flip so top = 0
         var byY = {};
         tc.items.forEach(function(it) {
           var s = it.str && it.str.trim();
@@ -1844,7 +1850,7 @@ function _purParseDateTotals(pdf, onProgress) {
           row.sort(function(a, b) { return a.x - b.x; });
           var line = row.map(function(r) { return r.text; }).join(' ');
 
-          // Track last seen date
+          // Track date
           for (var ri = 0; ri < row.length; ri++) {
             var dm = row[ri].text.match(dateRe);
             if (dm) lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
@@ -1854,25 +1860,23 @@ function _purParseDateTotals(pdf, onProgress) {
             lastDate = dm2[3] + '-' + dm2[2] + '-' + dm2[1];
           }
 
-          // Only DATE TOTAL rows (skip GRAND TOTAL for daily list)
-          if (!/DATE\s*TOTAL/i.test(line) || !lastDate) continue;
+          var isDateTotal  = /DATE\s*TOTAL/i.test(line);
+          var isGrandTotal = /GRAND\s*TOTAL/i.test(line);
 
-          // Collect numbers by X-band
+          if (!isDateTotal && !isGrandTotal) continue;
+
+          // Collect by X-band
           var qty = 0, netAmt = 0;
           for (var rk = 0; rk < row.length; rk++) {
-            var raw = String(row[rk].text).replace(/,/g, '');
-            var nv = parseFloat(raw);
+            var nv = parseFloat(String(row[rk].text).replace(/,/g, ''));
             if (isNaN(nv) || nv <= 0) continue;
             var x = row[rk].x;
 
-            if (x >= COL.qty.min && x <= COL.qty.max) {
-              qty = nv;
-            } else if (x >= COL.net.min && x <= COL.net.max) {
-              netAmt = nv;
-            }
+            if (x >= COL.qty.min && x <= COL.qty.max) qty = nv;
+            else if (x >= COL.net.min && x <= COL.net.max) netAmt = nv;
           }
 
-          // Fallback if bands missed (rare)
+          // Fallback
           if (netAmt === 0 || qty === 0) {
             var nums = [];
             for (var rk2 = 0; rk2 < row.length; rk2++) {
@@ -1892,7 +1896,14 @@ function _purParseDateTotals(pdf, onProgress) {
             }
           }
 
-          if (netAmt > 0) {
+          if (isGrandTotal) {
+            if (qty > 0) grandQty = Math.round(qty);
+            if (netAmt > 0) grandNet = Math.round(netAmt * 100) / 100;
+            continue;
+          }
+
+          // DATE TOTAL
+          if (netAmt > 0 && lastDate) {
             var dup = false;
             for (var di = 0; di < results.length; di++) {
               if (results[di].date === lastDate) { dup = true; break; }
@@ -1983,10 +1994,18 @@ function _showPurchasePDFPreview(results, fileName) {
     totalQty += r.qty;
   });
 
-  // Grand Total se 1 kg difference aaye to last entry adjust
-  if (results.length && Math.abs(totalQty - 180778) === 1) {
-    results[results.length - 1].qty += (180778 - totalQty);
-    totalQty = 180778;
+  // GRAND TOTAL se auto-correct (kisi bhi month ke liye)
+  var gQty = results._grandQty || 0;
+  var gNet = results._grandNet || 0;
+
+  if (gQty > 0 && results.length && Math.abs(totalQty - gQty) <= 5) {
+    // small difference (1-5 kg) → last day adjust
+    results[results.length - 1].qty += (gQty - totalQty);
+    totalQty = gQty;
+  }
+  if (gNet > 0 && results.length && Math.abs(totalAmt - gNet) < 1) {
+    results[results.length - 1].netAmt += (gNet - totalAmt);
+    totalAmt = gNet;
   }
 
   var trows = results.map(function(r, i) {
