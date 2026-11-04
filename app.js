@@ -2056,15 +2056,20 @@ function pdfReset() {
 // (agar nahi hai to yeh bhi add karo)
 
 function importPurchasePDF() {
-  // 1. Prefer in-memory data
   var rows = [];
+
+  // 1. Pehle memory se lo
   if (_pdfParsed && _pdfParsed.length) {
     rows = _pdfParsed.map(function(r) {
-      return { date: r.date, qty: r.qty, amount: r.netAmt };
+      return {
+        date:   r.date,
+        qty:    r.qty,
+        amount: r.netAmt
+      };
     });
   }
 
-  // 2. Fallback — DOM se reconstruct (agar _pdfParsed clear ho gaya ho)
+  // 2. Agar memory empty hai to preview table se reconstruct karo
   if (!rows.length) {
     var table = document.getElementById('pdf-preview-table');
     if (table) {
@@ -2072,17 +2077,17 @@ function importPurchasePDF() {
       trs.forEach(function(tr) {
         var tds = tr.querySelectorAll('td');
         if (tds.length >= 4) {
-          var dateTxt = (tds[1].textContent || '').trim(); // fmtD output
-          // fmtD usually shows DD-MMM-YYYY or YYYY-MM-DD — handle both
-          var d = dateTxt;
-          if (/^\d{2}-[A-Za-z]{3}-\d{4}$/.test(dateTxt)) {
-            // convert if needed, but most cases already YYYY-MM-DD
-            d = dateTxt;
-          }
-          var qty = parseFloat((tds[2].textContent || '').replace(/[^\d.]/g, '')) || 0;
-          var amt = parseFloat((tds[3].textContent || '').replace(/[^\d.]/g, '')) || 0;
-          if (d && amt > 0) {
-            rows.push({ date: d, qty: qty, amount: amt });
+          var dateTxt = (tds[1].textContent || '').trim();
+          var qty     = parseFloat((tds[2].textContent || '').replace(/[^\d.]/g, '')) || 0;
+          var amt     = parseFloat((tds[3].textContent || '').replace(/[^\d.]/g, '')) || 0;
+
+          // date already YYYY-MM-DD format mein hai (fmtD se)
+          if (dateTxt && amt > 0) {
+            rows.push({
+              date:   dateTxt,
+              qty:    qty,
+              amount: amt
+            });
           }
         }
       });
