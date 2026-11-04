@@ -1779,78 +1779,178 @@ function expTab(tab) {
    as a single line instead of scattered tokens.
    Returns Promise<string> — all pages text joined with newlines.
 */
-function _extractPDFText(file, onProgress) {
-  return new Promise(function(resolve, reject) {
-    if (typeof pdfjsLib === 'undefined') {
-      reject(new Error('PDF.js library load nahi hua. Internet check karein.'));
-      return;
-    }
 
-    var reader = new FileReader();
-    reader.onload = function(e) {
-      var typedArray = new Uint8Array(e.target.result);
+/* ═══════════════════════════════════════════════════════════
+   PDF.js — ACCURATE TABLE PARSER (from PurchaseUploader)
+   X-coordinate column mapping → line items → date-wise aggregate
+═══════════════════════════════════════════════════════════ */
 
-      pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
-        var totalPages = pdf.numPages;
-        var allPageTexts = new Array(totalPages);
-        var pagePromises = [];
+var _PUR_DATE_RE   = /^\d{2}\/\d{2}\/\d{4}$/;
+var _PUR_RANGE_RE  = /(\d{2}\/\d{2}\/\d{4})\s+To\s*:-\s*(\d{2}\/\d{2}\/\d{4})/i;
+var _PUR_NUM_RE    = /^\d[\d.]*$/;
+var _PUR_SKIP_RE   = /^(AGRONICO|C-65|MAIL\s*:|MSME:|PURCHASE\s+REGISTER|Date\s*:-|Purchase\s+Date|DATE\s+TOTAL|GRAND\s+TOTAL|Net\s+Amount|Page\s+\d)/i;
 
-        for (var pn = 1; pn <= totalPages; pn++) {
-          (function(pageNum) {
-            var p = pdf.getPage(pageNum).then(function(page) {
-              return page.getTextContent({ normalizeWhitespace: false });
-            }).then(function(content) {
+function _purPf(s) {
+  var v = parseFloat(String(s || '').replace(/[^\d.]/g, ''));
+  return isNaN(v) ? 0 : Math.round(v * 100) / 100;
+}
 
-              // Group items by rounded y-position (3pt tolerance)
-              var byY = {};
-              content.items.forEach(function(item) {
-                if (!item.str || !item.str.trim()) return;
-                var y = Math.round(item.transform[5] / 3) * 3; // round to 3pt
-                if (!byY[y]) byY[y] = [];
-                byY[y].push({ x: item.transform[4], text: item.str.trim() });
-              });
+// Column boundaries for Purchase Register (scale=1)
+// date:0-90  item:90-252  qty:252-287  unit:287-330
+// wgt:330-386  rate:386-452  amount:452-525  net:525+
+function _purXCol(x) {
+  if (x < 90)  return 'date';
+  if (x < 252) return 'item';
+  if (x < 287) return 'qty';
+  if (x < 330) return 'unit';
+  if (x < 386) return 'wgt';
+  if (x < 452) return 'rate';
+  if (x < 525) return 'amount';
+  return 'net';
+}
 
-              // Sort y-positions descending (PDF y=0 is bottom, page top = largest y)
-              var ys = Object.keys(byY).map(Number).sort(function(a,b){ return b-a; });
+function _purIsVendor(t) {
+  if (_PUR_DATE_RE.test(t.trim())) return false;
+  if (/\d{4,}/.test(t)) return false;
+  var L = t.replace(/[^a-zA-Z]/g, '');
+  var U = t.replace(/[^A-Z]/g, '');
+  return L.length >= 3 && U.length / Math.max(L.length, 1) >= 0.5;
+}
 
-              // Build lines: sort words in each y-group by x-position
-              var lines = ys.map(function(y) {
-                return byY[y]
-                  .sort(function(a,b){ return a.x - b.x; })
-                  .map(function(w){ return w.text; })
-                  .join(' ');
-              });
-
-              allPageTexts[pageNum - 1] = lines.join('\n');
-              if (onProgress) onProgress(pageNum, totalPages);
-            });
-            pagePromises.push(p);
-          })(pn);
-        }
-
-        Promise.all(pagePromises).then(function() {
-          resolve(allPageTexts.join('\n'));
-        }).catch(reject);
-
-      }).catch(function(err) {
-        reject(new Error('PDF read nahi ho saka: ' + err.message));
+function _purPageItems(page) {
+  return page.getViewport({ scale: 1 }).then(function(vp) {
+    return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
+      .then(function(tc) {
+        var out = [];
+        tc.items.forEach(function(it) {
+          var s = it.str && it.str.trim();
+          if (s) out.push({
+            x: it.transform[4],
+            y: Math.round(vp.height - it.transform[5]),
+            text: s
+          });
+        });
+        return out;
       });
-    };
-    reader.onerror = function() { reject(new Error('File read failed')); };
-    reader.readAsArrayBuffer(file);
   });
 }
 
-/* ═══════════════════════════════════════════════════════════
-   PURCHASE PDF — FILE UPLOAD HANDLER
-═══════════════════════════════════════════════════════════ */
+function _purGrpY(items) {
+  var m = {};
+  items.forEach(function(it) {
+    var k = null, ks = Object.keys(m).map(Number);
+    for (var i = 0; i < ks.length; i++) {
+      if (Math.abs(ks[i] - it.y) <= 2) { k = ks[i]; break; }
+    }
+    if (k === null) k = it.y;
+    if (!m[k]) m[k] = [];
+    m[k].push(it);
+  });
+  return m;
+}
+
+// Parse full PDF → array of line items
+function _purParseAll(pdf, onProgress) {
+  var rows = [], pageNum = 0, total = pdf.numPages;
+
+  function nextPage() {
+    pageNum++;
+    if (pageNum > total) return Promise.resolve(rows);
+    if (onProgress) onProgress(pageNum, total);
+
+    return pdf.getPage(pageNum).then(function(page) {
+      return _purPageItems(page);
+    }).then(function(items) {
+      var yM  = _purGrpY(items);
+      var yKs = Object.keys(yM).map(Number).sort(function(a, b) { return a - b; });
+      var recs = [];
+
+      for (var yi = 0; yi < yKs.length; yi++) {
+        var ri = yM[yKs[yi]].sort(function(a, b) { return a.x - b.x; });
+        var rec = { date: '', item: [], qty: '', unit: '', wgt: '', rate: '', amount: '', net: '' };
+        ri.forEach(function(it) {
+          var c = _purXCol(it.x);
+          if (c === 'item') rec.item.push(it.text);
+          else if (c === 'date') rec.date = it.text.trim();
+          else if (rec[c] !== undefined) rec[c] = (rec[c] ? rec[c] + ' ' : '') + it.text;
+        });
+        rec.item = rec.item.join(' ').trim();
+        rec._f = ri.map(function(it) { return it.text; }).join(' ');
+        recs.push(rec);
+      }
+
+      var pD = '', pI = '', pQ = '', pU = '', vnd = '';
+      for (var ri2 = 0; ri2 < recs.length; ri2++) {
+        var r = recs[ri2], f = r._f;
+
+        if (_PUR_RANGE_RE.test(f)) continue;
+        if (_PUR_SKIP_RE.test(f)) continue;
+
+        var hN = r.net && _PUR_NUM_RE.test(r.net.split(' ')[0]);
+        var hD = r.date && _PUR_DATE_RE.test(r.date);
+        var hI = r.item.length > 0;
+        var hW = r.wgt && _PUR_NUM_RE.test(r.wgt.split(' ')[0]);
+
+        if (hN && hW) {
+          var fD = hD ? r.date : pD;
+          var fI = hI ? r.item : pI;
+          var fQ = r.qty || pQ || '0';
+          var fU = r.unit || pU || 'KG';
+          if (fD && _PUR_DATE_RE.test(fD) && fI) {
+            rows.push({
+              date: fD,
+              qty:  _purPf(r.wgt),       // Weight_KG as qty (matches DATE TOTAL)
+              amount: _purPf(r.amount),
+              netAmt: _purPf(r.net)
+            });
+            pD = pI = pQ = pU = '';
+          }
+        } else if (hD || hI) {
+          if (hD) pD = r.date;
+          if (hI) pI = (pI ? pI + ' ' : '') + r.item;
+          if (r.qty)  pQ = r.qty;
+          if (r.unit) pU = r.unit;
+          if (!hD && _purIsVendor(f)) { vnd = f.trim(); pD = pI = pQ = pU = ''; }
+        } else if (_purIsVendor(f)) {
+          vnd = f.trim(); pD = pI = pQ = pU = '';
+        }
+      }
+      return nextPage();
+    });
+  }
+  return nextPage();
+}
+
+// Aggregate line items → one row per date
+function _purAggregateByDate(items) {
+  var map = {};
+  items.forEach(function(r) {
+    // DD/MM/YYYY → YYYY-MM-DD
+    var p = r.date.split('/');
+    if (p.length !== 3) return;
+    var key = p[2] + '-' + p[1] + '-' + p[0];
+    if (!map[key]) map[key] = { date: key, qty: 0, netAmt: 0, amount: 0, count: 0 };
+    map[key].qty    += r.qty;
+    map[key].netAmt += r.netAmt;
+    map[key].amount += r.amount;
+    map[key].count  += 1;
+  });
+  return Object.keys(map).sort().map(function(k) {
+    return {
+      date:   map[k].date,
+      qty:    Math.round(map[k].qty),
+      netAmt: Math.round(map[k].netAmt * 100) / 100
+    };
+  });
+}
+
+/* ── Purchase PDF upload handlers ── */
 var _pdfParsed = [];
 
 function handlePDFDrop(event) {
   var file = event.dataTransfer.files[0];
   if (file) _processPurchasePDF(file);
 }
-
 function handlePDFFileSelect(input) {
   var file = input.files[0];
   if (file) _processPurchasePDF(file);
@@ -1860,96 +1960,53 @@ function _processPurchasePDF(file) {
   if (!file || file.type !== 'application/pdf') {
     toast('Sirf PDF file select karein', 'warning'); return;
   }
+  if (typeof pdfjsLib === 'undefined') {
+    toast('PDF.js library load nahi hua', 'error'); return;
+  }
 
-  // Show loading
-  document.getElementById('pdf-dropzone').style.display  = 'none';
-  document.getElementById('pdf-loading').style.display   = '';
+  document.getElementById('pdf-dropzone').style.display = 'none';
+  document.getElementById('pdf-loading').style.display  = '';
   document.getElementById('pdf-loading-text').textContent = 'PDF read ho raha hai… (' + file.name + ')';
 
-  _extractPDFText(file, function(page, total) {
-    document.getElementById('pdf-loading-page').textContent = 'Page ' + page + ' / ' + total;
-  }).then(function(text) {
-    document.getElementById('pdf-loading').style.display = 'none';
-    _parsePurchaseText(text, file.name);
-  }).catch(function(err) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var typedArray = new Uint8Array(e.target.result);
+    pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
+      return _purParseAll(pdf, function(page, total) {
+        document.getElementById('pdf-loading-page').textContent = 'Page ' + page + ' / ' + total;
+      });
+    }).then(function(items) {
+      document.getElementById('pdf-loading').style.display = 'none';
+
+      if (!items.length) {
+        document.getElementById('pdf-dropzone').style.display = '';
+        toast('Koi purchase entries nahi mili. Sahi Purchase Register PDF hai?', 'warning');
+        return;
+      }
+
+      var results = _purAggregateByDate(items);
+      _pdfParsed = results;
+
+      if (!results.length) {
+        document.getElementById('pdf-dropzone').style.display = '';
+        toast('Date-wise totals nahi ban paye', 'warning');
+        return;
+      }
+
+      _showPurchasePDFPreview(results, file.name);
+      toast('✅ ' + items.length + ' line items → ' + results.length + ' din', 'success');
+    }).catch(function(err) {
+      document.getElementById('pdf-loading').style.display  = 'none';
+      document.getElementById('pdf-dropzone').style.display = '';
+      toast('❌ ' + (err.message || 'PDF parse failed'), 'error');
+    });
+  };
+  reader.onerror = function() {
     document.getElementById('pdf-loading').style.display  = 'none';
     document.getElementById('pdf-dropzone').style.display = '';
-    toast('❌ ' + err.message, 'error');
-  });
-}
-
-function _parsePurchaseText(rawText, fileName) {
-  var lines    = rawText.split('\n');
-  var results  = [];
-  var lastDate = null;
-
-  // Date pattern: DD/MM/YYYY
-  var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
-  // Number extractor (handles 1,234.56 or 1234.56 or 1234)
-  var numRe  = /[\d,]+\.?\d*/g;
-
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
-
-    // Track last date seen on any line
-    var dm = line.match(dateRe);
-    if (dm) {
-      lastDate = dm[3] + '-' + dm[2] + '-' + dm[1]; // YYYY-MM-DD
-    }
-
-    // Detect DATE TOTAL (may span current + next 1-2 lines due to PDF.js y-grouping)
-    if (/DATE\s*TOTAL/i.test(line) && lastDate) {
-      // Collect numbers from this line + next 2 lines
-      var chunk = line;
-      if (i + 1 < lines.length) chunk += ' ' + lines[i + 1];
-      if (i + 2 < lines.length) chunk += ' ' + lines[i + 2];
-
-      var rawNums = chunk.match(numRe) || [];
-      var nums = [];
-      for (var n = 0; n < rawNums.length; n++) {
-        var v = parseFloat(String(rawNums[n]).replace(/,/g, ''));
-        if (!isNaN(v) && v > 0) nums.push(v);
-      }
-
-      // Need at least 2 meaningful numbers
-      if (nums.length < 2) continue;
-
-      // Net Amount = LARGEST number
-      // Qty = largest number that is < 50,000 (daily purchase qty won't exceed this)
-      var sorted = nums.slice().sort(function(a, b) { return b - a; });
-      var netAmt = sorted[0];
-
-      var qty = 0;
-      for (var q = 0; q < sorted.length; q++) {
-        if (sorted[q] < 50000 && sorted[q] !== netAmt) {
-          qty = Math.round(sorted[q]);
-          break;
-        }
-      }
-
-      if (netAmt <= 0) continue;
-
-      // Dedup by date
-      var dup = false;
-      for (var j = 0; j < results.length; j++) {
-        if (results[j].date === lastDate) { dup = true; break; }
-      }
-      if (!dup) {
-        results.push({ date: lastDate, qty: qty, netAmt: netAmt });
-      }
-    }
-  }
-
-  _pdfParsed = results;
-
-  if (!results.length) {
-    document.getElementById('pdf-dropzone').style.display = '';
-    toast('DATE TOTAL rows nahi mile. Sahi Purchase Register PDF hai?', 'warning');
-    return;
-  }
-
-  results.sort(function(a, b) { return a.date.localeCompare(b.date); });
-  _showPurchasePDFPreview(results, fileName);
+    toast('❌ File read failed', 'error');
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function _showPurchasePDFPreview(results, fileName) {
@@ -1958,7 +2015,7 @@ function _showPurchasePDFPreview(results, fileName) {
     totalAmt += r.netAmt;
     totalQty += r.qty;
     return '<tr style="border-top:1px solid var(--border)">'
-      + '<td style="padding:7px 10px;font-size:11px;color:var(--sub);width:28px">' + (i+1) + '</td>'
+      + '<td style="padding:7px 10px;font-size:11px;color:var(--sub);width:28px">' + (i + 1) + '</td>'
       + '<td style="padding:7px 10px;font-weight:600;font-size:12px;white-space:nowrap">' + fmtD(r.date) + '</td>'
       + '<td style="padding:7px 10px;font-size:12px;color:var(--muted);text-align:right">' + r.qty.toLocaleString('en-IN') + '</td>'
       + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--red)">₹' + fmt(r.netAmt) + '</td>'
@@ -1974,13 +2031,13 @@ function _showPurchasePDFPreview(results, fileName) {
     + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Net Amount</th>'
     + '</tr></thead><tbody>' + trows + '</tbody></table>';
 
-  document.getElementById('pdf-found-count').textContent  = results.length;
-  document.getElementById('pdf-total-amt').textContent    = '₹' + fmt(totalAmt);
-  document.getElementById('pdf-total-qty').textContent    = totalQty.toLocaleString('en-IN') + ' kg';
-  document.getElementById('pdf-file-name').textContent    = fileName || '';
+  document.getElementById('pdf-found-count').textContent = results.length;
+  document.getElementById('pdf-total-amt').textContent   = '₹' + fmt(totalAmt);
+  document.getElementById('pdf-total-qty').textContent   = totalQty.toLocaleString('en-IN') + ' kg';
+  document.getElementById('pdf-file-name').textContent   = fileName || '';
 
-  document.getElementById('pdf-step-1').style.display   = 'none';
-  document.getElementById('pdf-step-2').style.display   = '';
+  document.getElementById('pdf-step-1').style.display    = 'none';
+  document.getElementById('pdf-step-2').style.display    = '';
   document.getElementById('pdf-import-btn').style.display = '';
 }
 
@@ -1999,6 +2056,8 @@ function pdfReset() {
   if (s2) s2.style.display = 'none';
   if (ib) ib.style.display = 'none';
 }
+
+
 
 /* ═══════════════════════════════════════════════════════════
    PURCHASE PDF BULK IMPORT → GAS bulkSavePurchase
@@ -2237,19 +2296,17 @@ function saveBulkSale(type) {
 
 /* ═══════════════════════════════════════════════════════════
    EXPENSE PDF PARSER
-   Expense Voucher List PDF se DATE TOTAL rows extract karta hai.
-   Pattern: DATE TOTAL...  <Credit>  <Debit>
-   Debit = actual expense (always the LARGEST number).
-   Daily totals → monthly aggregate for Monthly Expenses sheet.
+   Expense Voucher List — DATE TOTAL se Debit extract
+   Debit column = expense amount (usually the larger number,
+   but we take the number under DEBIT column via context)
 ═══════════════════════════════════════════════════════════ */
-var _expPdfParsed  = [];  // [{date, debit, credit}, ...]
-var _expPdfMonthly = [];  // [{month, amount, days}, ...]
+var _expPdfParsed  = [];
+var _expPdfMonthly = [];
 
 function handleExpensePDFDrop(event) {
   var file = event.dataTransfer.files[0];
   if (file) _processExpensePDF(file);
 }
-
 function handleExpensePDFFileSelect(input) {
   var file = input.files[0];
   if (file) _processExpensePDF(file);
@@ -2259,6 +2316,9 @@ function _processExpensePDF(file) {
   if (!file || file.type !== 'application/pdf') {
     toast('Sirf PDF file select karein', 'warning'); return;
   }
+  if (typeof pdfjsLib === 'undefined') {
+    toast('PDF.js library load nahi hua', 'error'); return;
+  }
 
   var dz = document.getElementById('exp-pdf-dropzone');
   var ld = document.getElementById('exp-pdf-loading');
@@ -2267,85 +2327,139 @@ function _processExpensePDF(file) {
   var lt = document.getElementById('exp-pdf-loading-text');
   if (lt) lt.textContent = 'PDF read ho raha hai… (' + file.name + ')';
 
-  _extractPDFText(file, function(page, total) {
-    var lp = document.getElementById('exp-pdf-loading-page');
-    if (lp) lp.textContent = 'Page ' + page + ' / ' + total;
-  }).then(function(text) {
-    if (ld) ld.style.display = 'none';
-    _parseExpenseText(text, file.name);
-  }).catch(function(err) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var typedArray = new Uint8Array(e.target.result);
+    pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
+      return _expParseAll(pdf, function(page, total) {
+        var lp = document.getElementById('exp-pdf-loading-page');
+        if (lp) lp.textContent = 'Page ' + page + ' / ' + total;
+      });
+    }).then(function(results) {
+      if (ld) ld.style.display = 'none';
+      if (!results.length) {
+        if (dz) dz.style.display = '';
+        toast('DATE TOTAL rows nahi mile. Sahi Expense Voucher PDF hai?', 'warning');
+        return;
+      }
+      _expPdfParsed = results;
+      _expBuildMonthly(results, file.name);
+    }).catch(function(err) {
+      if (ld) ld.style.display = 'none';
+      if (dz) dz.style.display = '';
+      toast('❌ ' + (err.message || 'PDF parse failed'), 'error');
+    });
+  };
+  reader.onerror = function() {
     if (ld) ld.style.display = 'none';
     if (dz) dz.style.display = '';
-    toast('❌ ' + err.message, 'error');
-  });
+    toast('❌ File read failed', 'error');
+  };
+  reader.readAsArrayBuffer(file);
 }
 
-function _parseExpenseText(rawText, fileName) {
-  var lines    = rawText.split('\n');
-  var results  = [];
+function _expParseAll(pdf, onProgress) {
+  var results = [], pageNum = 0, total = pdf.numPages;
   var lastDate = null;
-
   var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
-  var numRe  = /[\d,]+\.?\d*/g;
 
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i];
+  function nextPage() {
+    pageNum++;
+    if (pageNum > total) return Promise.resolve(results);
+    if (onProgress) onProgress(pageNum, total);
 
-    var dm = line.match(dateRe);
-    if (dm) {
-      lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
-    }
+    return pdf.getPage(pageNum).then(function(page) {
+      return page.getViewport({ scale: 1 }).then(function(vp) {
+        return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
+          .then(function(tc) {
+            // Group by Y
+            var byY = {};
+            tc.items.forEach(function(it) {
+              var s = it.str && it.str.trim();
+              if (!s) return;
+              var y = Math.round(vp.height - it.transform[5]);
+              // cluster within 3pt
+              var key = null;
+              Object.keys(byY).forEach(function(k) {
+                if (Math.abs(Number(k) - y) <= 3) key = k;
+              });
+              if (key === null) key = String(y);
+              if (!byY[key]) byY[key] = [];
+              byY[key].push({ x: it.transform[4], text: s });
+            });
 
-    if (/DATE\s*TOTAL/i.test(line) && lastDate) {
-      var chunk = line;
-      if (i + 1 < lines.length) chunk += ' ' + lines[i + 1];
-      if (i + 2 < lines.length) chunk += ' ' + lines[i + 2];
+            var ys = Object.keys(byY).map(Number).sort(function(a, b) { return a - b; });
+            ys.forEach(function(y) {
+              var row = byY[String(y)] || byY[y];
+              if (!row) {
+                // find closest key
+                Object.keys(byY).forEach(function(k) {
+                  if (Math.abs(Number(k) - y) <= 3) row = byY[k];
+                });
+              }
+              if (!row) return;
+              row.sort(function(a, b) { return a.x - b.x; });
+              var line = row.map(function(r) { return r.text; }).join(' ');
 
-      var rawNums = chunk.match(numRe) || [];
-      var nums = [];
-      for (var n = 0; n < rawNums.length; n++) {
-        var v = parseFloat(String(rawNums[n]).replace(/,/g, ''));
-        if (!isNaN(v) && v >= 0) nums.push(v);
-      }
+              // Track date
+              var dm = line.match(dateRe);
+              if (dm && !/DATE\s*TOTAL/i.test(line) && !/GRAND/i.test(line)) {
+                lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
+              }
 
-      if (nums.length < 1) continue;
+              // DATE TOTAL row
+              if (/DATE\s*TOTAL/i.test(line) && lastDate) {
+                // Collect numbers from this row sorted by X
+                // In Expense PDF: left number under DEBIT, right under CREDIT
+                // Visual: DEBIT is larger (expenses), CREDIT is smaller
+                var nums = [];
+                row.forEach(function(r) {
+                  var v = parseFloat(r.text.replace(/,/g, ''));
+                  if (!isNaN(v) && v >= 0 && /[\d.]/.test(r.text)) {
+                    nums.push({ x: r.x, v: v });
+                  }
+                });
+                nums.sort(function(a, b) { return a.x - b.x; });
 
-      // Debit = LARGEST (expense), Credit = smaller
-      var sorted = nums.slice().sort(function(a, b) { return b - a; });
-      var debit  = sorted[0];
-      var credit = sorted.length > 1 ? sorted[1] : 0;
+                // Take the LEFTMOST significant number as Debit
+                // (Debit column is left of Credit in the table)
+                // Fallback: largest number
+                var debit = 0;
+                if (nums.length >= 2) {
+                  // Two numbers: left=Debit, right=Credit (based on column layout)
+                  // BUT sometimes Credit appears first in text if x-positions vary
+                  // Safer: Debit is almost always the LARGER value for daily expense
+                  debit = Math.max(nums[0].v, nums[1].v);
+                } else if (nums.length === 1) {
+                  debit = nums[0].v;
+                }
 
-      if (debit <= 0) continue;
-
-      var dup = false;
-      for (var j = 0; j < results.length; j++) {
-        if (results[j].date === lastDate) { dup = true; break; }
-      }
-      if (!dup) {
-        results.push({ date: lastDate, debit: debit, credit: credit });
-      }
-    }
+                if (debit > 0) {
+                  var dup = results.some(function(r) { return r.date === lastDate; });
+                  if (!dup) {
+                    results.push({ date: lastDate, debit: debit });
+                  }
+                }
+              }
+            });
+            return nextPage();
+          });
+      });
+    });
   }
+  return nextPage();
+}
 
-  _expPdfParsed = results;
+function _expBuildMonthly(daily, fileName) {
+  daily.sort(function(a, b) { return a.date.localeCompare(b.date); });
 
-  if (!results.length) {
-    var dz2 = document.getElementById('exp-pdf-dropzone');
-    if (dz2) dz2.style.display = '';
-    toast('DATE TOTAL rows nahi mile. Sahi Expense Voucher PDF hai?', 'warning');
-    return;
-  }
-
-  results.sort(function(a, b) { return a.date.localeCompare(b.date); });
-
-  // Aggregate by month
   var monthMap = {};
-  results.forEach(function(r) {
+  daily.forEach(function(r) {
     var parts = r.date.split('-');
     var key = parts[0] + '-' + parts[1];
     if (!monthMap[key]) monthMap[key] = { amount: 0, days: 0 };
     monthMap[key].amount += r.debit;
-    monthMap[key].days  += 1;
+    monthMap[key].days += 1;
   });
 
   var monthNames = ['', 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
@@ -2356,12 +2470,12 @@ function _parseExpenseText(rawText, fileName) {
     return {
       monthKey: k,
       month: monthNames[parseInt(parts[1], 10)] + ' ' + parts[0],
-      amount: monthMap[k].amount,
+      amount: Math.round(monthMap[k].amount * 100) / 100,
       days: monthMap[k].days
     };
   });
 
-  _showExpensePDFPreview(results, _expPdfMonthly, fileName);
+  _showExpensePDFPreview(daily, _expPdfMonthly, fileName);
 }
 
 function _showExpensePDFPreview(daily, monthly, fileName) {
@@ -2378,13 +2492,12 @@ function _showExpensePDFPreview(daily, monthly, fileName) {
   if (tableEl) {
     var trows = monthly.map(function(m, i) {
       return '<tr style="border-top:1px solid var(--border)">'
-        + '<td style="padding:7px 10px;font-size:11px;color:var(--sub)">' + (i+1) + '</td>'
+        + '<td style="padding:7px 10px;font-size:11px;color:var(--sub)">' + (i + 1) + '</td>'
         + '<td style="padding:7px 10px;font-weight:600;font-size:12px">' + m.month + '</td>'
         + '<td style="padding:7px 10px;font-size:12px;color:var(--muted);text-align:right">' + m.days + ' days</td>'
         + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--amber)">₹' + fmt(m.amount) + '</td>'
         + '</tr>';
     }).join('');
-
     tableEl.innerHTML =
       '<table style="width:100%;border-collapse:collapse;font-size:12px">'
       + '<thead><tr style="background:var(--bg)">'
@@ -2402,38 +2515,31 @@ function _showExpensePDFPreview(daily, monthly, fileName) {
   if (step2)   step2.style.display = '';
   if (importBtn) importBtn.style.display = '';
 
-  // Auto-fill manual fields if single month
   if (monthly.length === 1) {
     var sel = document.getElementById('exp-month');
     var amtInp = document.getElementById('exp-amt');
     if (sel) {
       for (var i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].value === monthly[0].month) {
-          sel.selectedIndex = i; break;
-        }
+        if (sel.options[i].value === monthly[0].month) { sel.selectedIndex = i; break; }
       }
     }
     if (amtInp) amtInp.value = Math.round(monthly[0].amount);
   }
 
-  toast('✅ ' + daily.length + ' din extract hue · Total ₹' + fmt(totalAmt), 'success');
+  toast('✅ ' + daily.length + ' din · Total ₹' + fmt(totalAmt), 'success');
 }
 
 function expPdfReset() {
-  _expPdfParsed  = [];
+  _expPdfParsed = [];
   _expPdfMonthly = [];
   var fi = document.getElementById('exp-pdf-file-input');
   if (fi) fi.value = '';
-  var dz = document.getElementById('exp-pdf-dropzone');
-  var ld = document.getElementById('exp-pdf-loading');
-  var s1 = document.getElementById('exp-pdf-step-1');
-  var s2 = document.getElementById('exp-pdf-step-2');
-  var ib = document.getElementById('exp-pdf-import-btn');
-  if (dz) dz.style.display = '';
-  if (ld) ld.style.display = 'none';
-  if (s1) s1.style.display = '';
-  if (s2) s2.style.display = 'none';
-  if (ib) ib.style.display = 'none';
+  ['exp-pdf-dropzone', 'exp-pdf-loading', 'exp-pdf-step-1', 'exp-pdf-step-2', 'exp-pdf-import-btn'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'exp-pdf-dropzone' || id === 'exp-pdf-step-1') el.style.display = '';
+    else el.style.display = 'none';
+  });
 }
 
 function importExpensePDF() {
@@ -2444,9 +2550,7 @@ function importExpensePDF() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…'; }
   _busy = true;
 
-  var pending = _expPdfMonthly.length;
-  var saved   = 0;
-  var errors  = [];
+  var pending = _expPdfMonthly.length, saved = 0, errors = [];
   var grandTotal = _expPdfMonthly.reduce(function(s, x) { return s + x.amount; }, 0);
 
   _expPdfMonthly.forEach(function(m) {
@@ -2454,35 +2558,23 @@ function importExpensePDF() {
       function(r) {
         pending--;
         if (r && r.success) saved++;
-        else errors.push(m.month + ': ' + ((r && r.error) || 'fail'));
+        else errors.push(m.month);
         if (pending === 0) {
           _busy = false;
           if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All'; }
           if (saved) {
-            closeModal('m-exp');
-            expPdfReset();
+            closeModal('m-exp'); expPdfReset();
             toast('✅ ' + saved + ' month expense import ho gaye!', 'success');
-            _waSend(WA_ADMIN_NUMBERS,
-              '💸 *Fresko — Bulk Expense Import*\n'
-              + '━━━━━━━━━━━━━━━━━━\n'
-              + '📅 *Months:* ' + saved + '\n'
-              + '💰 *Total:* ₹' + fmt(grandTotal) + '\n'
-              + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
-              + '━━━━━━━━━━━━━━━━━━\n_Fresko P&L Tracker_'
-            );
             _loadData(false);
-          } else {
-            toast('❌ Import failed: ' + errors.join(', '), 'error');
-          }
+          } else toast('❌ Import failed', 'error');
         }
       },
-      function(e) {
+      function() {
         pending--;
-        errors.push(m.month + ': network');
         if (pending === 0) {
           _busy = false;
           if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All'; }
-          toast('❌ ' + (e.message || 'Network error'), 'error');
+          toast('❌ Network error', 'error');
         }
       }
     );
