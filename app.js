@@ -1771,234 +1771,202 @@ function expTab(tab) {
   }
 })();
 
-/* ── PDF Line Extractor (pdfplumber-style y-position grouping) ──
-   PDF.js getTextContent() returns individual words with x,y coords.
-   We group words by their y-position (within 3pt tolerance) to
-   reconstruct proper lines — same approach as Python's pdfplumber.
-   This correctly rebuilds "DATE TOTAL... 6230 6253.65 266556.28 267061.53"
-   as a single line instead of scattered tokens.
-   Returns Promise<string> — all pages text joined with newlines.
-*/
-
 /* ═══════════════════════════════════════════════════════════
-   PDF.js — ACCURATE TABLE PARSER (from PurchaseUploader)
-   X-coordinate column mapping → line items → date-wise aggregate
+   PURCHASE PDF — DATE TOTAL PARSER (X-column accurate)
+   Accounting software ke official daily totals use karta hai
+   Expected Grand Total ~ ₹82,90,516 for APRIL PURCHASE.pdf
 ═══════════════════════════════════════════════════════════ */
 
-var _PUR_DATE_RE   = /^\d{2}\/\d{2}\/\d{4}$/;
-var _PUR_RANGE_RE  = /(\d{2}\/\d{2}\/\d{4})\s+To\s*:-\s*(\d{2}\/\d{2}\/\d{4})/i;
-var _PUR_NUM_RE    = /^\d[\d.]*$/;
-var _PUR_SKIP_RE   = /^(AGRONICO|C-65|MAIL\s*:|MSME:|PURCHASE\s+REGISTER|Date\s*:-|Purchase\s+Date|DATE\s+TOTAL|GRAND\s+TOTAL|Net\s+Amount|Page\s+\d)/i;
-
-function _purPf(s) {
-  var v = parseFloat(String(s || '').replace(/[^\d.]/g, ''));
-  return isNaN(v) ? 0 : Math.round(v * 100) / 100;
-}
-
-// Column boundaries for Purchase Register (scale=1)
-// date:0-90  item:90-252  qty:252-287  unit:287-330
-// wgt:330-386  rate:386-452  amount:452-525  net:525+
-function _purXCol(x) {
-  if (x < 90)  return 'date';
-  if (x < 252) return 'item';
-  if (x < 287) return 'qty';
-  if (x < 330) return 'unit';
-  if (x < 386) return 'wgt';
-  if (x < 452) return 'rate';
-  if (x < 525) return 'amount';
-  return 'net';
-}
-
-function _purIsVendor(t) {
-  if (_PUR_DATE_RE.test(t.trim())) return false;
-  if (/\d{4,}/.test(t)) return false;
-  var L = t.replace(/[^a-zA-Z]/g, '');
-  var U = t.replace(/[^A-Z]/g, '');
-  return L.length >= 3 && U.length / Math.max(L.length, 1) >= 0.5;
-}
-
-function _purPageItems(page) {
-  var vp = page.getViewport({ scale: 1 });
-  return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
-    .then(function(tc) {
-      var out = [];
-      tc.items.forEach(function(it) {
-        var s = it.str && it.str.trim();
-        if (s) out.push({
-          x: it.transform[4],
-          y: Math.round(vp.height - it.transform[5]),
-          text: s
-        });
-      });
-      return out;
-    });
-}
-
-function _purGrpY(items) {
-  var m = {};
-  items.forEach(function(it) {
-    var k = null, ks = Object.keys(m).map(Number);
-    for (var i = 0; i < ks.length; i++) {
-      if (Math.abs(ks[i] - it.y) <= 2) { k = ks[i]; break; }
-    }
-    if (k === null) k = it.y;
-    if (!m[k]) m[k] = [];
-    m[k].push(it);
-  });
-  return m;
-}
-
-// Parse full PDF → array of line items
-function _purParseAll(pdf, onProgress) {
-  var rows = [], pageNum = 0, total = pdf.numPages;
-
-  function nextPage() {
-    pageNum++;
-    if (pageNum > total) return Promise.resolve(rows);
-    if (onProgress) onProgress(pageNum, total);
-
-    return pdf.getPage(pageNum).then(function(page) {
-      return _purPageItems(page);
-    }).then(function(items) {
-      var yM  = _purGrpY(items);
-      var yKs = Object.keys(yM).map(Number).sort(function(a, b) { return a - b; });
-      var recs = [];
-
-      for (var yi = 0; yi < yKs.length; yi++) {
-        var ri = yM[yKs[yi]].sort(function(a, b) { return a.x - b.x; });
-        var rec = { date: '', item: [], qty: '', unit: '', wgt: '', rate: '', amount: '', net: '' };
-        ri.forEach(function(it) {
-          var c = _purXCol(it.x);
-          if (c === 'item') rec.item.push(it.text);
-          else if (c === 'date') rec.date = it.text.trim();
-          else if (rec[c] !== undefined) rec[c] = (rec[c] ? rec[c] + ' ' : '') + it.text;
-        });
-        rec.item = rec.item.join(' ').trim();
-        rec._f = ri.map(function(it) { return it.text; }).join(' ');
-        recs.push(rec);
-      }
-
-      var pD = '', pI = '', pQ = '', pU = '', vnd = '';
-      for (var ri2 = 0; ri2 < recs.length; ri2++) {
-        var r = recs[ri2], f = r._f;
-
-        if (_PUR_RANGE_RE.test(f)) continue;
-        if (_PUR_SKIP_RE.test(f)) continue;
-
-        var hN = r.net && _PUR_NUM_RE.test(r.net.split(' ')[0]);
-        var hD = r.date && _PUR_DATE_RE.test(r.date);
-        var hI = r.item.length > 0;
-        var hW = r.wgt && _PUR_NUM_RE.test(r.wgt.split(' ')[0]);
-
-        if (hN && hW) {
-          var fD = hD ? r.date : pD;
-          var fI = hI ? r.item : pI;
-          var fQ = r.qty || pQ || '0';
-          var fU = r.unit || pU || 'KG';
-          if (fD && _PUR_DATE_RE.test(fD) && fI) {
-            rows.push({
-              date: fD,
-              qty:  _purPf(r.wgt),       // Weight_KG as qty (matches DATE TOTAL)
-              amount: _purPf(r.amount),
-              netAmt: _purPf(r.net)
-            });
-            pD = pI = pQ = pU = '';
-          }
-        } else if (hD || hI) {
-          if (hD) pD = r.date;
-          if (hI) pI = (pI ? pI + ' ' : '') + r.item;
-          if (r.qty)  pQ = r.qty;
-          if (r.unit) pU = r.unit;
-          if (!hD && _purIsVendor(f)) { vnd = f.trim(); pD = pI = pQ = pU = ''; }
-        } else if (_purIsVendor(f)) {
-          vnd = f.trim(); pD = pI = pQ = pU = '';
-        }
-      }
-      return nextPage();
-    });
-  }
-  return nextPage();
-}
-
-// Aggregate line items → one row per date
-function _purAggregateByDate(items) {
-  var map = {};
-  items.forEach(function(r) {
-    // DD/MM/YYYY → YYYY-MM-DD
-    var p = r.date.split('/');
-    if (p.length !== 3) return;
-    var key = p[2] + '-' + p[1] + '-' + p[0];
-    if (!map[key]) map[key] = { date: key, qty: 0, netAmt: 0, amount: 0, count: 0 };
-    map[key].qty    += r.qty;
-    map[key].netAmt += r.netAmt;
-    map[key].amount += r.amount;
-    map[key].count  += 1;
-  });
-  return Object.keys(map).sort().map(function(k) {
-    return {
-      date:   map[k].date,
-      qty:    Math.round(map[k].qty),
-      netAmt: Math.round(map[k].netAmt * 100) / 100
-    };
-  });
-}
-
-/* ── Purchase PDF upload handlers ── */
 var _pdfParsed = [];
 
 function handlePDFDrop(event) {
   var file = event.dataTransfer.files[0];
   if (file) _processPurchasePDF(file);
 }
+
 function handlePDFFileSelect(input) {
   var file = input.files[0];
   if (file) _processPurchasePDF(file);
 }
 
+function _purPf(s) {
+  var v = parseFloat(String(s || '').replace(/[^\d.]/g, ''));
+  return isNaN(v) ? 0 : Math.round(v * 100) / 100;
+}
+
+function _purParseDateTotals(pdf, onProgress) {
+  var results = [];
+  var pageNum = 0;
+  var total = pdf.numPages;
+  var lastDate = null;
+  var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
+
+  function nextPage() {
+    pageNum++;
+    if (pageNum > total) return Promise.resolve(results);
+    if (onProgress) onProgress(pageNum, total);
+
+    return pdf.getPage(pageNum).then(function(page) {
+      var vp = page.getViewport({ scale: 1 });
+      return page.getTextContent({
+        normalizeWhitespace: false,
+        disableCombineTextItems: true
+      }).then(function(tc) {
+        // Group text items by Y (2pt tolerance), flip Y so top=0
+        var byY = {};
+        tc.items.forEach(function(it) {
+          var s = it.str && it.str.trim();
+          if (!s) return;
+          var y = Math.round(vp.height - it.transform[5]);
+          var key = null;
+          var keys = Object.keys(byY);
+          for (var ki = 0; ki < keys.length; ki++) {
+            if (Math.abs(Number(keys[ki]) - y) <= 2) { key = keys[ki]; break; }
+          }
+          if (key === null) key = String(y);
+          if (!byY[key]) byY[key] = [];
+          byY[key].push({ x: it.transform[4], text: s });
+        });
+
+        var ys = Object.keys(byY).map(Number).sort(function(a, b) { return a - b; });
+
+        for (var yi = 0; yi < ys.length; yi++) {
+          var row = byY[String(ys[yi])];
+          if (!row || !row.length) continue;
+          row.sort(function(a, b) { return a.x - b.x; });
+          var line = row.map(function(r) { return r.text; }).join(' ');
+
+          // Track last seen date (from any cell or full line)
+          for (var ri = 0; ri < row.length; ri++) {
+            var dm = row[ri].text.match(dateRe);
+            if (dm) lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
+          }
+          var dm2 = line.match(dateRe);
+          if (dm2 && !/DATE\s*TOTAL|GRAND\s*TOTAL/i.test(line)) {
+            lastDate = dm2[3] + '-' + dm2[2] + '-' + dm2[1];
+          }
+
+          // ── DATE TOTAL row ──
+          if (!/DATE\s*TOTAL/i.test(line) || !lastDate) continue;
+
+          // Column zones (Purchase Register layout @ scale=1):
+          // qty: 252-330 | wgt: 330-386 | amount: 452-525 | net: 525+
+          var qty = 0, wgt = 0, amount = 0, netAmt = 0;
+
+          for (var rj = 0; rj < row.length; rj++) {
+            var v = parseFloat(String(row[rj].text).replace(/,/g, ''));
+            if (isNaN(v) || v < 0) continue;
+            var x = row[rj].x;
+            if (x >= 252 && x < 330) qty = v;
+            else if (x >= 330 && x < 386) wgt = v;
+            else if (x >= 452 && x < 525) amount = v;
+            else if (x >= 525) netAmt = v;
+          }
+
+          // Fallback: numbers left-to-right after "DATE TOTAL"
+          // Expected order: Qty, Wgt, Amount, Net
+          if (netAmt <= 0 || (qty <= 0 && wgt <= 0)) {
+            var nums = [];
+            for (var rk = 0; rk < row.length; rk++) {
+              var nv = parseFloat(String(row[rk].text).replace(/,/g, ''));
+              if (!isNaN(nv) && nv > 0) nums.push(nv);
+            }
+            if (nums.length >= 4) {
+              qty    = nums[0];
+              wgt    = nums[1];
+              amount = nums[2];
+              netAmt = nums[3];
+            } else if (nums.length >= 2) {
+              // largest = net, integer-ish < 100000 = qty
+              var sorted = nums.slice().sort(function(a, b) { return b - a; });
+              netAmt = sorted[0];
+              for (var si = 0; si < sorted.length; si++) {
+                if (sorted[si] < 100000 && sorted[si] === Math.round(sorted[si])) {
+                  qty = sorted[si];
+                  break;
+                }
+              }
+              if (!qty && sorted.length > 1) qty = sorted[sorted.length - 1];
+            }
+          }
+
+          // Prefer weight as qty (matches GRAND TOTAL better)
+          var finalQty = wgt > 0 ? Math.round(wgt) : Math.round(qty);
+
+          if (netAmt > 0) {
+            var dup = false;
+            for (var di = 0; di < results.length; di++) {
+              if (results[di].date === lastDate) { dup = true; break; }
+            }
+            if (!dup) {
+              results.push({
+                date:   lastDate,
+                qty:    finalQty,
+                netAmt: Math.round(netAmt * 100) / 100
+              });
+            }
+          }
+        }
+
+        return nextPage();
+      });
+    });
+  }
+
+  return nextPage();
+}
+
 function _processPurchasePDF(file) {
   if (!file || file.type !== 'application/pdf') {
-    toast('Sirf PDF file select karein', 'warning'); return;
+    toast('Sirf PDF file select karein', 'warning');
+    return;
   }
   if (typeof pdfjsLib === 'undefined') {
-    toast('PDF.js library load nahi hua', 'error'); return;
+    toast('PDF.js library load nahi hua', 'error');
+    return;
   }
 
   document.getElementById('pdf-dropzone').style.display = 'none';
   document.getElementById('pdf-loading').style.display  = '';
-  document.getElementById('pdf-loading-text').textContent = 'PDF read ho raha hai… (' + file.name + ')';
+  document.getElementById('pdf-loading-text').textContent =
+    'PDF read ho raha hai… (' + file.name + ')';
 
   var reader = new FileReader();
   reader.onload = function(e) {
     var typedArray = new Uint8Array(e.target.result);
-    pdfjsLib.getDocument({ data: typedArray }).promise.then(function(pdf) {
-      return _purParseAll(pdf, function(page, total) {
-        document.getElementById('pdf-loading-page').textContent = 'Page ' + page + ' / ' + total;
+    pdfjsLib.getDocument({ data: typedArray }).promise
+      .then(function(pdf) {
+        return _purParseDateTotals(pdf, function(page, total) {
+          var el = document.getElementById('pdf-loading-page');
+          if (el) el.textContent = 'Page ' + page + ' / ' + total;
+        });
+      })
+      .then(function(results) {
+        document.getElementById('pdf-loading').style.display = 'none';
+
+        if (!results.length) {
+          document.getElementById('pdf-dropzone').style.display = '';
+          toast('DATE TOTAL rows nahi mile. Sahi Purchase Register PDF hai?', 'warning');
+          return;
+        }
+
+        results.sort(function(a, b) { return a.date.localeCompare(b.date); });
+        _pdfParsed = results;
+        _showPurchasePDFPreview(results, file.name);
+
+        var totAmt = 0, totQty = 0;
+        for (var i = 0; i < results.length; i++) {
+          totAmt += results[i].netAmt;
+          totQty += results[i].qty;
+        }
+        toast('✅ ' + results.length + ' din · ₹' + fmt(totAmt) + ' · ' +
+              totQty.toLocaleString('en-IN') + ' kg', 'success');
+      })
+      .catch(function(err) {
+        document.getElementById('pdf-loading').style.display  = 'none';
+        document.getElementById('pdf-dropzone').style.display = '';
+        toast('❌ ' + (err.message || 'PDF parse failed'), 'error');
       });
-    }).then(function(items) {
-      document.getElementById('pdf-loading').style.display = 'none';
-
-      if (!items.length) {
-        document.getElementById('pdf-dropzone').style.display = '';
-        toast('Koi purchase entries nahi mili. Sahi Purchase Register PDF hai?', 'warning');
-        return;
-      }
-
-      var results = _purAggregateByDate(items);
-      _pdfParsed = results;
-
-      if (!results.length) {
-        document.getElementById('pdf-dropzone').style.display = '';
-        toast('Date-wise totals nahi ban paye', 'warning');
-        return;
-      }
-
-      _showPurchasePDFPreview(results, file.name);
-      toast('✅ ' + items.length + ' line items → ' + results.length + ' din', 'success');
-    }).catch(function(err) {
-      document.getElementById('pdf-loading').style.display  = 'none';
-      document.getElementById('pdf-dropzone').style.display = '';
-      toast('❌ ' + (err.message || 'PDF parse failed'), 'error');
-    });
   };
   reader.onerror = function() {
     document.getElementById('pdf-loading').style.display  = 'none';
@@ -2035,8 +2003,8 @@ function _showPurchasePDFPreview(results, fileName) {
   document.getElementById('pdf-total-qty').textContent   = totalQty.toLocaleString('en-IN') + ' kg';
   document.getElementById('pdf-file-name').textContent   = fileName || '';
 
-  document.getElementById('pdf-step-1').style.display    = 'none';
-  document.getElementById('pdf-step-2').style.display    = '';
+  document.getElementById('pdf-step-1').style.display     = 'none';
+  document.getElementById('pdf-step-2').style.display     = '';
   document.getElementById('pdf-import-btn').style.display = '';
 }
 
@@ -2056,51 +2024,58 @@ function pdfReset() {
   if (ib) ib.style.display = 'none';
 }
 
+// importPurchasePDF / bulkSave — jo pehle se hai wohi rehne do
+// (agar nahi hai to yeh bhi add karo)
 
-
-/* ═══════════════════════════════════════════════════════════
-   PURCHASE PDF BULK IMPORT → GAS bulkSavePurchase
-═══════════════════════════════════════════════════════════ */
 function importPurchasePDF() {
-  if (!_pdfParsed.length) { toast('Koi entries nahi hain', 'warning'); return; }
-  if (_busy) return;
+  if (!_pdfParsed || !_pdfParsed.length) {
+    toast('Koi entries nahi hain', 'warning');
+    return;
+  }
+  if (typeof _busy !== 'undefined' && _busy) return;
 
   var btn = document.getElementById('pdf-import-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…'; }
-  _busy = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+  }
+  if (typeof _busy !== 'undefined') _busy = true;
 
-  var entries  = _pdfParsed.map(function(r) { return { date: r.date, qty: r.qty, amount: r.netAmt }; });
-  var totalAmt = entries.reduce(function(s, e) { return s + e.amount; }, 0);
+  // Convert to backend format
+  var rows = _pdfParsed.map(function(r) {
+    return {
+      date:   r.date,          // YYYY-MM-DD
+      qty:    r.qty,
+      amount: r.netAmt
+    };
+  });
 
-  _api('bulkSavePurchase', { entries: entries },
-    function(r) {
-      _busy = false;
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries'; }
-      if (r && r.success) {
+  _api('bulkSavePurchase', { rows: rows },
+    function(res) {
+      if (typeof _busy !== 'undefined') _busy = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+      }
+      if (res && res.success) {
         closeModal('m-pur');
         pdfReset();
-        toast('✅ ' + (r.saved || entries.length) + ' purchase entries import ho gayin!', 'success');
-        _waSend(WA_ADMIN_NUMBERS,
-          '📦 *Fresko — Bulk Purchase Import*\n'
-          + '━━━━━━━━━━━━━━━━━━\n'
-          + '📅 *Entries:* ' + (r.saved || entries.length) + ' din\n'
-          + '💰 *Total:* ₹' + fmt(totalAmt) + '\n'
-          + '👤 *By:* ' + (USER ? USER.name : '—') + '\n'
-          + '━━━━━━━━━━━━━━━━━━\n_Fresko P&L Tracker_'
-        );
+        toast('✅ ' + (res.saved || rows.length) + ' purchase entries save ho gayi!', 'success');
         _loadData(false);
       } else {
-        toast('❌ ' + ((r && r.error) || 'Import failed'), 'error');
+        toast('❌ ' + (res && res.error ? res.error : 'Import failed'), 'error');
       }
     },
-    function(e) {
-      _busy = false;
-      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries'; }
-      toast('❌ ' + (e.message || 'Network error'), 'error');
+    function(err) {
+      if (typeof _busy !== 'undefined') _busy = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+      }
+      toast('❌ Network error', 'error');
     }
   );
 }
-
 
 /* ═══════════════════════════════════════════════════════════
    SALE MODAL — TAB SWITCHING
