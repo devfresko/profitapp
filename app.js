@@ -1801,6 +1801,14 @@ function _purParseDateTotals(pdf, onProgress) {
   var lastDate = null;
   var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
 
+  // Column X bands (stable across all 85 pages)
+  var COL = {
+    qty:  { min: 240, max: 275 },
+    wgt:  { min: 310, max: 360 },
+    amt:  { min: 440, max: 500 },
+    net:  { min: 520, max: 580 }
+  };
+
   function nextPage() {
     pageNum++;
     if (pageNum > total) return Promise.resolve(results);
@@ -1812,7 +1820,7 @@ function _purParseDateTotals(pdf, onProgress) {
         normalizeWhitespace: false,
         disableCombineTextItems: true
       }).then(function(tc) {
-        // Group by Y (2pt), flip so top = 0
+        // Group by Y (2pt tolerance), flip so top = 0
         var byY = {};
         tc.items.forEach(function(it) {
           var s = it.str && it.str.trim();
@@ -1836,7 +1844,7 @@ function _purParseDateTotals(pdf, onProgress) {
           row.sort(function(a, b) { return a.x - b.x; });
           var line = row.map(function(r) { return r.text; }).join(' ');
 
-          // Track date
+          // Track last seen date
           for (var ri = 0; ri < row.length; ri++) {
             var dm = row[ri].text.match(dateRe);
             if (dm) lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
@@ -1846,37 +1854,42 @@ function _purParseDateTotals(pdf, onProgress) {
             lastDate = dm2[3] + '-' + dm2[2] + '-' + dm2[1];
           }
 
-          // Only DATE TOTAL rows
+          // Only DATE TOTAL rows (skip GRAND TOTAL for daily list)
           if (!/DATE\s*TOTAL/i.test(line) || !lastDate) continue;
 
-          // Collect numbers LEFT → RIGHT (by x)
-          // Order in PDF: Qty | Wgt | Amount | Net Amount
-          var nums = [];
+          // Collect numbers by X-band
+          var qty = 0, netAmt = 0;
           for (var rk = 0; rk < row.length; rk++) {
-            var nv = parseFloat(String(row[rk].text).replace(/,/g, ''));
-            if (!isNaN(nv) && nv > 0) {
-              nums.push({ x: row[rk].x, v: nv });
+            var raw = String(row[rk].text).replace(/,/g, '');
+            var nv = parseFloat(raw);
+            if (isNaN(nv) || nv <= 0) continue;
+            var x = row[rk].x;
+
+            if (x >= COL.qty.min && x <= COL.qty.max) {
+              qty = nv;
+            } else if (x >= COL.net.min && x <= COL.net.max) {
+              netAmt = nv;
             }
           }
-          nums.sort(function(a, b) { return a.x - b.x; });
-          var vals = nums.map(function(n) { return n.v; });
 
-          var qty = 0, netAmt = 0;
-
-          if (vals.length >= 4) {
-            // [Qty, Wgt, Amount, Net]
-            qty    = vals[0];
-            netAmt = vals[3];
-          } else if (vals.length === 3) {
-            // sometimes Wgt missing: [Qty, Amount, Net]
-            qty    = vals[0];
-            netAmt = vals[2];
-          } else if (vals.length === 2) {
-            // [Qty, Net] or [something, Net]
-            qty    = vals[0] < 100000 ? vals[0] : 0;
-            netAmt = Math.max(vals[0], vals[1]);
-          } else if (vals.length === 1) {
-            netAmt = vals[0];
+          // Fallback if bands missed (rare)
+          if (netAmt === 0 || qty === 0) {
+            var nums = [];
+            for (var rk2 = 0; rk2 < row.length; rk2++) {
+              var nv2 = parseFloat(String(row[rk2].text).replace(/,/g, ''));
+              if (!isNaN(nv2) && nv2 > 0) nums.push({ x: row[rk2].x, v: nv2 });
+            }
+            nums.sort(function(a, b) { return a.x - b.x; });
+            var vals = nums.map(function(n) { return n.v; });
+            if (vals.length >= 4) {
+              if (qty === 0) qty = vals[0];
+              if (netAmt === 0) netAmt = vals[3];
+            } else if (vals.length === 3) {
+              if (qty === 0) qty = vals[0];
+              if (netAmt === 0) netAmt = vals[2];
+            } else if (vals.length >= 1 && netAmt === 0) {
+              netAmt = vals[vals.length - 1];
+            }
           }
 
           if (netAmt > 0) {
