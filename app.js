@@ -1812,7 +1812,7 @@ function _purParseDateTotals(pdf, onProgress) {
         normalizeWhitespace: false,
         disableCombineTextItems: true
       }).then(function(tc) {
-        // Group text items by Y (2pt tolerance), flip Y so top=0
+        // Group by Y (2pt), flip so top = 0
         var byY = {};
         tc.items.forEach(function(it) {
           var s = it.str && it.str.trim();
@@ -1836,7 +1836,7 @@ function _purParseDateTotals(pdf, onProgress) {
           row.sort(function(a, b) { return a.x - b.x; });
           var line = row.map(function(r) { return r.text; }).join(' ');
 
-          // Track last seen date (from any cell or full line)
+          // Track date
           for (var ri = 0; ri < row.length; ri++) {
             var dm = row[ri].text.match(dateRe);
             if (dm) lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
@@ -1846,54 +1846,38 @@ function _purParseDateTotals(pdf, onProgress) {
             lastDate = dm2[3] + '-' + dm2[2] + '-' + dm2[1];
           }
 
-          // ── DATE TOTAL row ──
+          // Only DATE TOTAL rows
           if (!/DATE\s*TOTAL/i.test(line) || !lastDate) continue;
 
-          // Column zones (Purchase Register layout @ scale=1):
-          // qty: 252-330 | wgt: 330-386 | amount: 452-525 | net: 525+
-          var qty = 0, wgt = 0, amount = 0, netAmt = 0;
-
-          for (var rj = 0; rj < row.length; rj++) {
-            var v = parseFloat(String(row[rj].text).replace(/,/g, ''));
-            if (isNaN(v) || v < 0) continue;
-            var x = row[rj].x;
-            if (x >= 252 && x < 330) qty = v;
-            else if (x >= 330 && x < 386) wgt = v;
-            else if (x >= 452 && x < 525) amount = v;
-            else if (x >= 525) netAmt = v;
-          }
-
-          // Fallback: numbers left-to-right after "DATE TOTAL"
-          // Expected order: Qty, Wgt, Amount, Net
-          if (netAmt <= 0 || (qty <= 0 && wgt <= 0)) {
-            var nums = [];
-            for (var rk = 0; rk < row.length; rk++) {
-              var nv = parseFloat(String(row[rk].text).replace(/,/g, ''));
-              if (!isNaN(nv) && nv > 0) nums.push(nv);
-            }
-            if (nums.length >= 4) {
-              qty    = nums[0];
-              wgt    = nums[1];
-              amount = nums[2];
-              netAmt = nums[3];
-            } else if (nums.length >= 2) {
-              // largest = net, integer-ish < 100000 = qty
-              var sorted = nums.slice().sort(function(a, b) { return b - a; });
-              netAmt = sorted[0];
-              for (var si = 0; si < sorted.length; si++) {
-                if (sorted[si] < 100000 && sorted[si] === Math.round(sorted[si])) {
-                  qty = sorted[si];
-                  break;
-                }
-              }
-              if (!qty && sorted.length > 1) qty = sorted[sorted.length - 1];
+          // Collect numbers LEFT → RIGHT (by x)
+          // Order in PDF: Qty | Wgt | Amount | Net Amount
+          var nums = [];
+          for (var rk = 0; rk < row.length; rk++) {
+            var nv = parseFloat(String(row[rk].text).replace(/,/g, ''));
+            if (!isNaN(nv) && nv > 0) {
+              nums.push({ x: row[rk].x, v: nv });
             }
           }
+          nums.sort(function(a, b) { return a.x - b.x; });
+          var vals = nums.map(function(n) { return n.v; });
 
-          // Prefer weight as qty (matches GRAND TOTAL better)
-// Qty column prefer karo (GRAND TOTAL Qty = 180778)
-// Agar qty nahi mila to wgt fallback
-var finalQty = qty > 0 ? Math.round(qty) : Math.round(wgt);
+          var qty = 0, netAmt = 0;
+
+          if (vals.length >= 4) {
+            // [Qty, Wgt, Amount, Net]
+            qty    = vals[0];
+            netAmt = vals[3];
+          } else if (vals.length === 3) {
+            // sometimes Wgt missing: [Qty, Amount, Net]
+            qty    = vals[0];
+            netAmt = vals[2];
+          } else if (vals.length === 2) {
+            // [Qty, Net] or [something, Net]
+            qty    = vals[0] < 100000 ? vals[0] : 0;
+            netAmt = Math.max(vals[0], vals[1]);
+          } else if (vals.length === 1) {
+            netAmt = vals[0];
+          }
 
           if (netAmt > 0) {
             var dup = false;
@@ -1903,7 +1887,7 @@ var finalQty = qty > 0 ? Math.round(qty) : Math.round(wgt);
             if (!dup) {
               results.push({
                 date:   lastDate,
-                qty:    finalQty,
+                qty:    Math.round(qty),
                 netAmt: Math.round(netAmt * 100) / 100
               });
             }
