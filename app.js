@@ -1891,7 +1891,9 @@ function _purParseDateTotals(pdf, onProgress) {
           }
 
           // Prefer weight as qty (matches GRAND TOTAL better)
-          var finalQty = wgt > 0 ? Math.round(wgt) : Math.round(qty);
+// Qty column prefer karo (GRAND TOTAL Qty = 180778)
+// Agar qty nahi mila to wgt fallback
+var finalQty = qty > 0 ? Math.round(qty) : Math.round(wgt);
 
           if (netAmt > 0) {
             var dup = false;
