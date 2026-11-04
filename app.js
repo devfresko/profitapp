@@ -2058,18 +2058,14 @@ function pdfReset() {
 function importPurchasePDF() {
   var rows = [];
 
-  // 1. Pehle memory se lo
+  // Memory se
   if (_pdfParsed && _pdfParsed.length) {
     rows = _pdfParsed.map(function(r) {
-      return {
-        date:   r.date,
-        qty:    r.qty,
-        amount: r.netAmt
-      };
+      return { date: r.date, qty: r.qty, amount: r.netAmt };
     });
   }
 
-  // 2. Agar memory empty hai to preview table se reconstruct karo
+  // DOM fallback
   if (!rows.length) {
     var table = document.getElementById('pdf-preview-table');
     if (table) {
@@ -2080,14 +2076,8 @@ function importPurchasePDF() {
           var dateTxt = (tds[1].textContent || '').trim();
           var qty     = parseFloat((tds[2].textContent || '').replace(/[^\d.]/g, '')) || 0;
           var amt     = parseFloat((tds[3].textContent || '').replace(/[^\d.]/g, '')) || 0;
-
-          // date already YYYY-MM-DD format mein hai (fmtD se)
           if (dateTxt && amt > 0) {
-            rows.push({
-              date:   dateTxt,
-              qty:    qty,
-              amount: amt
-            });
+            rows.push({ date: dateTxt, qty: qty, amount: amt });
           }
         }
       });
@@ -2099,18 +2089,16 @@ function importPurchasePDF() {
     return;
   }
 
-  if (typeof _busy !== 'undefined' && _busy) return;
+  console.log('Importing rows:', rows.length, rows); // debug ke liye
 
   var btn = document.getElementById('pdf-import-btn');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
   }
-  if (typeof _busy !== 'undefined') _busy = true;
 
   _api('bulkSavePurchase', { rows: rows },
     function(res) {
-      if (typeof _busy !== 'undefined') _busy = false;
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
@@ -2125,7 +2113,6 @@ function importPurchasePDF() {
       }
     },
     function(err) {
-      if (typeof _busy !== 'undefined') _busy = false;
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
