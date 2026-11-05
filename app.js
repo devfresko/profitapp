@@ -2878,3 +2878,44 @@ function importLocalSalePDF() {
     }
   );
 }
+
+function localSubTab(tab) {
+  var manualBtn  = document.getElementById('local-sub-manual');
+  var pdfBtn     = document.getElementById('local-sub-pdf');
+  var manualPanel = document.getElementById('local-sub-panel-manual');
+  var pdfPanel   = document.getElementById('local-sub-panel-pdf');
+  var saveBtn    = document.getElementById('local-save-btn');
+  var importBtn  = document.getElementById('local-pdf-import-btn');
+
+  if (tab === 'manual') {
+    if (manualBtn) { manualBtn.style.borderBottom = '2px solid var(--red)'; manualBtn.style.color = 'var(--red)'; manualBtn.style.fontWeight = '700'; }
+    if (pdfBtn)    { pdfBtn.style.borderBottom = '2px solid transparent'; pdfBtn.style.color = 'var(--muted)'; pdfBtn.style.fontWeight = '600'; }
+    if (manualPanel) manualPanel.style.display = '';
+    if (pdfPanel)    pdfPanel.style.display = 'none';
+    if (saveBtn)     saveBtn.style.display = '';
+    if (importBtn)   importBtn.style.display = 'none';
+  } else {
+    if (pdfBtn)    { pdfBtn.style.borderBottom = '2px solid var(--red)'; pdfBtn.style.color = 'var(--red)'; pdfBtn.style.fontWeight = '700'; }
+    if (manualBtn) { manualBtn.style.borderBottom = '2px solid transparent'; manualBtn.style.color = 'var(--muted)'; manualBtn.style.fontWeight = '600'; }
+    if (manualPanel) manualPanel.style.display = 'none';
+    if (pdfPanel)    pdfPanel.style.display = '';
+    if (saveBtn)     saveBtn.style.display = 'none';
+    // importBtn only shows after PDF is parsed
+  }
+}
+
+function localPdfReset() {
+  _localPdfParsed = [];
+  var fi = document.getElementById('local-pdf-file-input');
+  if (fi) fi.value = '';
+  var dz = document.getElementById('local-pdf-dropzone');
+  var ld = document.getElementById('local-pdf-loading');
+  var s1 = document.getElementById('local-pdf-step-1');
+  var s2 = document.getElementById('local-pdf-step-2');
+  var ib = document.getElementById('local-pdf-import-btn');
+  if (dz) dz.style.display = '';
+  if (ld) ld.style.display = 'none';
+  if (s1) s1.style.display = '';
+  if (s2) s2.style.display = 'none';
+  if (ib) ib.style.display = 'none';
+}
