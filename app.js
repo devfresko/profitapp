@@ -2521,7 +2521,8 @@ function _showExpensePDFPreview(daily, monthly, fileName) {
   var step2     = document.getElementById('exp-pdf-step-2');
   var importBtn = document.getElementById('exp-pdf-import-btn');
 
-  var totalAmt = daily.reduce(function(s, r) { return s + r.debit; }, 0);
+  // Total = monthly amounts ka sum (Grand Total se corrected)
+  var totalAmt = monthly.reduce(function(s, m) { return s + m.amount; }, 0);
 
   if (tableEl) {
     var trows = monthly.map(function(m, i) {
@@ -2532,6 +2533,7 @@ function _showExpensePDFPreview(daily, monthly, fileName) {
         + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--amber)">₹' + fmt(m.amount) + '</td>'
         + '</tr>';
     }).join('');
+
     tableEl.innerHTML =
       '<table style="width:100%;border-collapse:collapse;font-size:12px">'
       + '<thead><tr style="background:var(--bg)">'
@@ -2549,12 +2551,16 @@ function _showExpensePDFPreview(daily, monthly, fileName) {
   if (step2)   step2.style.display = '';
   if (importBtn) importBtn.style.display = '';
 
+  // Auto-fill manual form if single month
   if (monthly.length === 1) {
     var sel = document.getElementById('exp-month');
     var amtInp = document.getElementById('exp-amt');
     if (sel) {
       for (var i = 0; i < sel.options.length; i++) {
-        if (sel.options[i].value === monthly[0].month) { sel.selectedIndex = i; break; }
+        if (sel.options[i].value === monthly[0].month) {
+          sel.selectedIndex = i;
+          break;
+        }
       }
     }
     if (amtInp) amtInp.value = Math.round(monthly[0].amount);
