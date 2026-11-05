@@ -2381,10 +2381,14 @@ function _expParseAll(pdf, onProgress) {
   var results = [], pageNum = 0, total = pdf.numPages;
   var lastDate = null;
   var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
+  var grandDebit = 0;
 
   function nextPage() {
     pageNum++;
-    if (pageNum > total) return Promise.resolve(results);
+    if (pageNum > total) {
+      results._grandDebit = grandDebit;
+      return Promise.resolve(results);
+    }
     if (onProgress) onProgress(pageNum, total);
 
     return pdf.getPage(pageNum).then(function(page) {
@@ -2393,7 +2397,6 @@ function _expParseAll(pdf, onProgress) {
         normalizeWhitespace: false,
         disableCombineTextItems: true
       }).then(function(tc) {
-        // Group by Y
         var byY = {};
         tc.items.forEach(function(it) {
           var s = it.str && it.str.trim();
@@ -2423,46 +2426,47 @@ function _expParseAll(pdf, onProgress) {
             lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
           }
 
-          // DATE TOTAL found
-          if (/DATE\s*TOTAL/i.test(line) && lastDate) {
-            var nums = [];
+          var isDateTotal  = /DATE\s*TOTAL/i.test(line);
+          var isGrandTotal = /GRAND\s*TOTAL/i.test(line);
 
-            // 1. Same row numbers
-            row.forEach(function(r) {
+          if (!isDateTotal && !isGrandTotal) continue;
+
+          // Collect numbers from this row + next 1-2 rows
+          var nums = [];
+          row.forEach(function(r) {
+            var v = parseFloat(String(r.text).replace(/,/g, ''));
+            if (!isNaN(v) && v >= 0) nums.push(v);
+          });
+          for (var look = 1; look <= 2; look++) {
+            if (yi + look >= ys.length) break;
+            var nextRow = byY[String(ys[yi + look])];
+            if (!nextRow) continue;
+            var nextLine = nextRow.map(function(r) { return r.text; }).join(' ');
+            if (dateRe.test(nextLine) || /DATE\s*TOTAL|GRAND/i.test(nextLine)) break;
+            nextRow.forEach(function(r) {
               var v = parseFloat(String(r.text).replace(/,/g, ''));
               if (!isNaN(v) && v >= 0) nums.push(v);
             });
+          }
 
-            // 2. Next 1-2 rows (numbers often on next line)
-            for (var look = 1; look <= 2; look++) {
-              if (yi + look >= ys.length) break;
-              var nextRow = byY[String(ys[yi + look])];
-              if (!nextRow) continue;
-              var nextLine = nextRow.map(function(r) { return r.text; }).join(' ');
-              // Stop if next date or next DATE TOTAL starts
-              if (dateRe.test(nextLine) || /DATE\s*TOTAL|GRAND/i.test(nextLine)) break;
-              nextRow.forEach(function(r) {
-                var v = parseFloat(String(r.text).replace(/,/g, ''));
-                if (!isNaN(v) && v >= 0) nums.push(v);
-              });
+          // Debit = larger number
+          var debit = 0;
+          if (nums.length >= 2) debit = Math.max(nums[0], nums[1]);
+          else if (nums.length === 1) debit = nums[0];
+
+          if (isGrandTotal) {
+            if (debit > 0) grandDebit = Math.round(debit * 100) / 100;
+            continue;
+          }
+
+          // DATE TOTAL
+          if (debit > 0 && lastDate) {
+            var dup = false;
+            for (var di = 0; di < results.length; di++) {
+              if (results[di].date === lastDate) { dup = true; break; }
             }
-
-            // Debit = larger number (expense), Credit usually smaller/0
-            var debit = 0;
-            if (nums.length >= 2) {
-              debit = Math.max(nums[0], nums[1]);
-            } else if (nums.length === 1) {
-              debit = nums[0];
-            }
-
-            if (debit > 0) {
-              var dup = false;
-              for (var di = 0; di < results.length; di++) {
-                if (results[di].date === lastDate) { dup = true; break; }
-              }
-              if (!dup) {
-                results.push({ date: lastDate, debit: Math.round(debit * 100) / 100 });
-              }
+            if (!dup) {
+              results.push({ date: lastDate, debit: Math.round(debit * 100) / 100 });
             }
           }
         }
@@ -2478,8 +2482,8 @@ function _expParseAll(pdf, onProgress) {
 function _expBuildMonthly(daily, fileName) {
   var monthMap = {};
   daily.forEach(function(r) {
-    var parts = r.date.split('-'); // YYYY-MM-DD
-    var key = parts[0] + '-' + parts[1]; // YYYY-MM
+    var parts = r.date.split('-');
+    var key = parts[0] + '-' + parts[1];
     if (!monthMap[key]) monthMap[key] = { amount: 0, days: 0 };
     monthMap[key].amount += r.debit;
     monthMap[key].days += 1;
@@ -2498,8 +2502,15 @@ function _expBuildMonthly(daily, fileName) {
     };
   });
 
+  // GRAND TOTAL se override (authoritative)
+  var gDebit = daily._grandDebit || 0;
+  if (gDebit > 0 && _expPdfMonthly.length === 1) {
+    _expPdfMonthly[0].amount = gDebit;
+  }
+
   _showExpensePDFPreview(daily, _expPdfMonthly, fileName);
 }
+
 
 function _showExpensePDFPreview(daily, monthly, fileName) {
   var tableEl   = document.getElementById('exp-pdf-preview-table');
