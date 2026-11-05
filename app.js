@@ -2696,16 +2696,21 @@ function _localParseDateTotals(pdf, onProgress) {
   var total = pdf.numPages;
   var lastDate = null;
   var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
+  var grandAmt = 0;
+  var grandQty = 0;
 
-  // X bands from PDF analysis
   var COL = {
-    qty: { min: 290, max: 330 },
-    amt: { min: 500, max: 570 }
+    qty: { min: 290, max: 340 },
+    amt: { min: 500, max: 580 }
   };
 
   function nextPage() {
     pageNum++;
-    if (pageNum > total) return Promise.resolve(results);
+    if (pageNum > total) {
+      results._grandAmt = grandAmt;
+      results._grandQty = grandQty;
+      return Promise.resolve(results);
+    }
     if (onProgress) onProgress(pageNum, total);
 
     return pdf.getPage(pageNum).then(function(page) {
@@ -2743,7 +2748,9 @@ function _localParseDateTotals(pdf, onProgress) {
             lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
           }
 
-          if (!/DATE\s*TOTAL/i.test(line) || !lastDate) continue;
+          var isDateTotal  = /DATE\s*TOTAL/i.test(line);
+          var isGrandTotal = /GRAND\s*TOTAL/i.test(line);
+          if (!isDateTotal && !isGrandTotal) continue;
 
           var qty = 0, amt = 0;
           row.forEach(function(r) {
@@ -2753,7 +2760,7 @@ function _localParseDateTotals(pdf, onProgress) {
             else if (r.x >= COL.amt.min && r.x <= COL.amt.max) amt = v;
           });
 
-          // Fallback
+          // Fallback: rightmost positive number = amount
           if (amt === 0) {
             var nums = [];
             row.forEach(function(r) {
@@ -2761,11 +2768,18 @@ function _localParseDateTotals(pdf, onProgress) {
               if (!isNaN(v) && v > 0) nums.push({ x: r.x, v: v });
             });
             nums.sort(function(a, b) { return a.x - b.x; });
-            if (nums.length >= 1) amt = nums[nums.length - 1].v;
+            if (nums.length) amt = nums[nums.length - 1].v;
             if (nums.length >= 2 && qty === 0) qty = nums[0].v;
           }
 
-          if (amt > 0) {
+          if (isGrandTotal) {
+            if (amt > 0) grandAmt = Math.round(amt * 100) / 100;
+            if (qty > 0) grandQty = Math.round(qty * 100) / 100;
+            continue;
+          }
+
+          // DATE TOTAL
+          if (amt > 0 && lastDate) {
             var dup = false;
             for (var di = 0; di < results.length; di++) {
               if (results[di].date === lastDate) { dup = true; break; }
@@ -2787,6 +2801,14 @@ function _localParseDateTotals(pdf, onProgress) {
 }
 
 function _showLocalSalePDFPreview(results, fileName) {
+// Single day + GRAND TOTAL available → GRAND TOTAL use karo
+  var gAmt = results._grandAmt || 0;
+  var gQty = results._grandQty || 0;
+  if (results.length === 1 && gAmt > 0) {
+    results[0].amount = gAmt;
+    if (gQty > 0) results[0].qty = gQty;
+  }
+
   var totalAmt = 0, totalQty = 0;
   results.forEach(function(r) {
     totalAmt += r.amount;
