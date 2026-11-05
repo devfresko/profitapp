@@ -2387,88 +2387,106 @@ function _expParseAll(pdf, onProgress) {
     if (pageNum > total) return Promise.resolve(results);
     if (onProgress) onProgress(pageNum, total);
 
-return pdf.getPage(pageNum).then(function(page) {
-  var vp = page.getViewport({ scale: 1 });
-  return page.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: true })
-    .then(function(tc) {
-      // Group by Y
-      var byY = {};
-      tc.items.forEach(function(it) {
-        var s = it.str && it.str.trim();
-        if (!s) return;
-        var y = Math.round(vp.height - it.transform[5]);
-        var key = null;
-        Object.keys(byY).forEach(function(k) {
-          if (Math.abs(Number(k) - y) <= 3) key = k;
+    return pdf.getPage(pageNum).then(function(page) {
+      var vp = page.getViewport({ scale: 1 });
+      return page.getTextContent({
+        normalizeWhitespace: false,
+        disableCombineTextItems: true
+      }).then(function(tc) {
+        // Group by Y
+        var byY = {};
+        tc.items.forEach(function(it) {
+          var s = it.str && it.str.trim();
+          if (!s) return;
+          var y = Math.round(vp.height - it.transform[5]);
+          var key = null;
+          var keys = Object.keys(byY);
+          for (var ki = 0; ki < keys.length; ki++) {
+            if (Math.abs(Number(keys[ki]) - y) <= 3) { key = keys[ki]; break; }
+          }
+          if (key === null) key = String(y);
+          if (!byY[key]) byY[key] = [];
+          byY[key].push({ x: it.transform[4], text: s });
         });
-        if (key === null) key = String(y);
-        if (!byY[key]) byY[key] = [];
-        byY[key].push({ x: it.transform[4], text: s });
-      });
 
-      var ys = Object.keys(byY).map(Number).sort(function(a, b) { return a - b; });
-      ys.forEach(function(y) {
-        var row = byY[String(y)] || byY[y];
-        if (!row) {
-          Object.keys(byY).forEach(function(k) {
-            if (Math.abs(Number(k) - y) <= 3) row = byY[k];
-          });
-        }
-        if (!row) return;
-        row.sort(function(a, b) { return a.x - b.x; });
-        var line = row.map(function(r) { return r.text; }).join(' ');
+        var ys = Object.keys(byY).map(Number).sort(function(a, b) { return a - b; });
 
-        var dm = line.match(dateRe);
-        if (dm && !/DATE\s*TOTAL/i.test(line) && !/GRAND/i.test(line)) {
-          lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
-        }
+        for (var yi = 0; yi < ys.length; yi++) {
+          var row = byY[String(ys[yi])];
+          if (!row || !row.length) continue;
+          row.sort(function(a, b) { return a.x - b.x; });
+          var line = row.map(function(r) { return r.text; }).join(' ');
 
-        if (/DATE\s*TOTAL/i.test(line) && lastDate) {
-          var nums = [];
-          row.forEach(function(r) {
-            var v = parseFloat(r.text.replace(/,/g, ''));
-            if (!isNaN(v) && v >= 0 && /[\d.]/.test(r.text)) {
-              nums.push({ x: r.x, v: v });
-            }
-          });
-          nums.sort(function(a, b) { return a.x - b.x; });
-
-          var debit = 0;
-          if (nums.length >= 2) {
-            debit = Math.max(nums[0].v, nums[1].v);
-          } else if (nums.length === 1) {
-            debit = nums[0].v;
+          // Track date
+          var dm = line.match(dateRe);
+          if (dm && !/DATE\s*TOTAL|GRAND/i.test(line)) {
+            lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
           }
 
-          if (debit > 0) {
-            var dup = results.some(function(r) { return r.date === lastDate; });
-            if (!dup) {
-              results.push({ date: lastDate, debit: debit });
+          // DATE TOTAL found
+          if (/DATE\s*TOTAL/i.test(line) && lastDate) {
+            var nums = [];
+
+            // 1. Same row numbers
+            row.forEach(function(r) {
+              var v = parseFloat(String(r.text).replace(/,/g, ''));
+              if (!isNaN(v) && v >= 0) nums.push(v);
+            });
+
+            // 2. Next 1-2 rows (numbers often on next line)
+            for (var look = 1; look <= 2; look++) {
+              if (yi + look >= ys.length) break;
+              var nextRow = byY[String(ys[yi + look])];
+              if (!nextRow) continue;
+              var nextLine = nextRow.map(function(r) { return r.text; }).join(' ');
+              // Stop if next date or next DATE TOTAL starts
+              if (dateRe.test(nextLine) || /DATE\s*TOTAL|GRAND/i.test(nextLine)) break;
+              nextRow.forEach(function(r) {
+                var v = parseFloat(String(r.text).replace(/,/g, ''));
+                if (!isNaN(v) && v >= 0) nums.push(v);
+              });
+            }
+
+            // Debit = larger number (expense), Credit usually smaller/0
+            var debit = 0;
+            if (nums.length >= 2) {
+              debit = Math.max(nums[0], nums[1]);
+            } else if (nums.length === 1) {
+              debit = nums[0];
+            }
+
+            if (debit > 0) {
+              var dup = false;
+              for (var di = 0; di < results.length; di++) {
+                if (results[di].date === lastDate) { dup = true; break; }
+              }
+              if (!dup) {
+                results.push({ date: lastDate, debit: Math.round(debit * 100) / 100 });
+              }
             }
           }
         }
+
+        return nextPage();
       });
-      return nextPage();
     });
-});
   }
+
   return nextPage();
 }
 
 function _expBuildMonthly(daily, fileName) {
-  daily.sort(function(a, b) { return a.date.localeCompare(b.date); });
-
   var monthMap = {};
   daily.forEach(function(r) {
-    var parts = r.date.split('-');
-    var key = parts[0] + '-' + parts[1];
+    var parts = r.date.split('-'); // YYYY-MM-DD
+    var key = parts[0] + '-' + parts[1]; // YYYY-MM
     if (!monthMap[key]) monthMap[key] = { amount: 0, days: 0 };
     monthMap[key].amount += r.debit;
     monthMap[key].days += 1;
   });
 
   var monthNames = ['', 'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-                    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
 
   _expPdfMonthly = Object.keys(monthMap).sort().map(function(k) {
     var parts = k.split('-');
