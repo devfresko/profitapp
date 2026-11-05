@@ -1089,41 +1089,119 @@
 
     <!-- ── BULK LOCAL ── -->
     <div id="sal-panel-local" style="display:none">
-      <div style="padding:10px 16px;background:var(--red-l);border-bottom:1px solid var(--border);
-                  font-size:12px;color:var(--red-d);font-weight:600">
-        <i class="fas fa-store" style="margin-right:6px"></i>LOCAL SALE — Month-wise date-by-date entry
+      <!-- Sub-tabs: Manual | PDF -->
+      <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
+        <button id="local-sub-manual" onclick="localSubTab('manual')"
+          style="flex:1;padding:9px;font-size:11px;font-weight:700;border:none;cursor:pointer;
+                 border-bottom:2px solid var(--red);color:var(--red);background:transparent">
+          <i class="fas fa-keyboard" style="margin-right:5px"></i>Manual Entry
+        </button>
+        <button id="local-sub-pdf" onclick="localSubTab('pdf')"
+          style="flex:1;padding:9px;font-size:11px;font-weight:600;border:none;cursor:pointer;
+                 border-bottom:2px solid transparent;color:var(--muted);background:transparent">
+          <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
+        </button>
       </div>
-      <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
-        <input class="form-input" type="month" id="local-month" style="width:160px;flex:none"
-          oninput="salBuildRows('local')">
-        <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
-      </div>
-      <div id="local-table-wrap"
-        style="max-height:320px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr style="background:var(--bg)">
-              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
-              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
-              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
-              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
-              <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
-            </tr>
-          </thead>
-          <tbody id="local-tbody"></tbody>
-        </table>
-        <div id="local-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
-          Upar month select karein
+
+      <!-- MANUAL SUB-PANEL -->
+      <div id="local-sub-panel-manual">
+        <div style="padding:10px 16px;background:var(--red-l);border-bottom:1px solid var(--border);
+                    font-size:12px;color:var(--red-d);font-weight:600">
+          <i class="fas fa-store" style="margin-right:6px"></i>LOCAL SALE — Month-wise date-by-date entry
+        </div>
+        <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
+          <input class="form-input" type="month" id="local-month" style="width:160px;flex:none"
+            oninput="salBuildRows('local')">
+          <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
+        </div>
+        <div id="local-table-wrap"
+          style="max-height:280px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="background:var(--bg)">
+                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
+                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
+                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
+                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
+                <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
+              </tr>
+            </thead>
+            <tbody id="local-tbody"></tbody>
+          </table>
+          <div id="local-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
+            Upar month select karein
+          </div>
+        </div>
+        <div id="local-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--muted)">Total Amount</span>
+            <span id="local-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
+          </div>
         </div>
       </div>
-      <div id="local-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:12px;color:var(--muted)">Total Amount</span>
-          <span id="local-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
+
+      <!-- PDF SUB-PANEL -->
+      <div id="local-sub-panel-pdf" style="display:none">
+        <!-- Step 1: Dropzone -->
+        <div id="local-pdf-step-1">
+          <div id="local-pdf-dropzone"
+            style="margin:16px;border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
+                   text-align:center;cursor:pointer;transition:all .2s"
+            ondragover="event.preventDefault();this.style.borderColor='var(--red)';this.style.background='var(--red-l)'"
+            ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+            ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';handleLocalPDFDrop(event)"
+            onclick="document.getElementById('local-pdf-file-input').click()">
+            <i class="fas fa-file-pdf" style="font-size:32px;color:var(--red);margin-bottom:10px;display:block"></i>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">
+              LOCAL SALE PDF yahan drop karo
+            </div>
+            <div style="font-size:11px;color:var(--muted)">ya click karke select karo</div>
+            <input type="file" id="local-pdf-file-input" accept="application/pdf" style="display:none"
+              onchange="handleLocalPDFFileSelect(this)">
+          </div>
+          <div id="local-pdf-loading" style="display:none;text-align:center;padding:40px 20px">
+            <div class="spin-ring" style="margin:0 auto 12px"></div>
+            <div style="font-size:13px;color:var(--muted)">PDF read ho raha hai…</div>
+            <div id="local-pdf-loading-page" style="font-size:11px;color:var(--sub);margin-top:4px"></div>
+          </div>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
-          <span style="font-size:11px;color:var(--muted)">Non-zero entries</span>
-          <span id="local-entry-count" style="font-size:12px;font-weight:700;color:var(--text)">0</span>
+
+        <!-- Step 2: Preview -->
+        <div id="local-pdf-step-2" style="display:none">
+          <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
+                      border-bottom:1px solid var(--border);background:var(--bg)">
+            <div>
+              <span style="font-size:12px;font-weight:700;color:var(--green)">
+                <i class="fas fa-check-circle" style="margin-right:5px"></i>
+                <span id="local-pdf-found-count">0 days</span>
+              </span>
+              <span id="local-pdf-file-name" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
+            </div>
+            <button onclick="localPdfReset()" style="font-size:11px;color:var(--red);background:none;border:none;
+              cursor:pointer;font-weight:600">
+              <i class="fas fa-redo" style="margin-right:3px"></i>Change File
+            </button>
+          </div>
+
+          <div id="local-pdf-preview-table"
+            style="max-height:240px;overflow-y:auto;padding:0 16px"></div>
+
+          <div style="margin:12px 16px;padding:12px 14px;background:var(--green-l);border-radius:10px;
+                      display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div>
+              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Amount</div>
+              <div id="local-pdf-total-amt" style="font-size:18px;font-weight:800;color:var(--green)">₹0</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Qty</div>
+              <div id="local-pdf-total-qty" style="font-size:15px;font-weight:700;color:var(--text)">0</div>
+            </div>
+          </div>
+
+          <div style="padding:0 16px 12px;font-size:11px;color:var(--muted)">
+            <i class="fas fa-info-circle" style="margin-right:4px"></i>
+            Same date pe agar amount badla to purani value replace ho jayegi. Har change Audit Log mein save hoga.
+          </div>
         </div>
       </div>
     </div>
@@ -1179,8 +1257,13 @@
       </div>
       <div id="sal-ft-local" style="display:none;gap:8px;width:100%;justify-content:flex-end">
         <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
+        <!-- Manual save -->
         <button class="btn btn-green btn-sm" id="local-save-btn" onclick="saveBulkSale('local')">
           <i class="fas fa-upload"></i> Save LOCAL Entries
+        </button>
+        <!-- PDF import (hidden by default) -->
+        <button class="btn btn-red btn-sm" id="local-pdf-import-btn" onclick="importLocalSalePDF()" style="display:none">
+          <i class="fas fa-upload"></i> Import All Entries
         </button>
       </div>
       <div id="sal-ft-supply" style="display:none;gap:8px;width:100%;justify-content:flex-end">
