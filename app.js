@@ -2620,3 +2620,261 @@ function importExpensePDF() {
     );
   });
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ═══════════════════════════════════════════════════════════
+   LOCAL SALE PDF — DATE TOTAL PARSER
+═══════════════════════════════════════════════════════════ */
+var _localPdfParsed = [];
+
+function handleLocalPDFDrop(event) {
+  var file = event.dataTransfer.files[0];
+  if (file) _processLocalSalePDF(file);
+}
+function handleLocalPDFFileSelect(input) {
+  var file = input.files[0];
+  if (file) _processLocalSalePDF(file);
+}
+
+function _processLocalSalePDF(file) {
+  if (!file || file.type !== 'application/pdf') {
+    toast('Sirf PDF file select karein', 'warning'); return;
+  }
+  if (typeof pdfjsLib === 'undefined') {
+    toast('PDF.js library load nahi hua', 'error'); return;
+  }
+
+  var dz = document.getElementById('local-pdf-dropzone');
+  var ld = document.getElementById('local-pdf-loading');
+  if (dz) dz.style.display = 'none';
+  if (ld) ld.style.display = '';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var typedArray = new Uint8Array(e.target.result);
+    pdfjsLib.getDocument({ data: typedArray }).promise
+      .then(function(pdf) {
+        return _localParseDateTotals(pdf, function(page, total) {
+          var el = document.getElementById('local-pdf-loading-page');
+          if (el) el.textContent = 'Page ' + page + ' / ' + total;
+        });
+      })
+      .then(function(results) {
+        if (ld) ld.style.display = 'none';
+        if (!results.length) {
+          if (dz) dz.style.display = '';
+          toast('DATE TOTAL rows nahi mile', 'warning');
+          return;
+        }
+        results.sort(function(a, b) { return a.date.localeCompare(b.date); });
+        _localPdfParsed = results;
+        _showLocalSalePDFPreview(results, file.name);
+      })
+      .catch(function(err) {
+        if (ld) ld.style.display = 'none';
+        if (dz) dz.style.display = '';
+        toast('❌ ' + (err.message || 'PDF parse failed'), 'error');
+      });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _localParseDateTotals(pdf, onProgress) {
+  var results = [];
+  var pageNum = 0;
+  var total = pdf.numPages;
+  var lastDate = null;
+  var dateRe = /(\d{2})\/(\d{2})\/(\d{4})/;
+
+  // X bands from PDF analysis
+  var COL = {
+    qty: { min: 290, max: 330 },
+    amt: { min: 500, max: 570 }
+  };
+
+  function nextPage() {
+    pageNum++;
+    if (pageNum > total) return Promise.resolve(results);
+    if (onProgress) onProgress(pageNum, total);
+
+    return pdf.getPage(pageNum).then(function(page) {
+      var vp = page.getViewport({ scale: 1 });
+      return page.getTextContent({
+        normalizeWhitespace: false,
+        disableCombineTextItems: true
+      }).then(function(tc) {
+        var byY = {};
+        tc.items.forEach(function(it) {
+          var s = it.str && it.str.trim();
+          if (!s) return;
+          var y = Math.round(vp.height - it.transform[5]);
+          var key = null;
+          var keys = Object.keys(byY);
+          for (var ki = 0; ki < keys.length; ki++) {
+            if (Math.abs(Number(keys[ki]) - y) <= 3) { key = keys[ki]; break; }
+          }
+          if (key === null) key = String(y);
+          if (!byY[key]) byY[key] = [];
+          byY[key].push({ x: it.transform[4], text: s });
+        });
+
+        var ys = Object.keys(byY).map(Number).sort(function(a, b) { return a - b; });
+
+        for (var yi = 0; yi < ys.length; yi++) {
+          var row = byY[String(ys[yi])];
+          if (!row || !row.length) continue;
+          row.sort(function(a, b) { return a.x - b.x; });
+          var line = row.map(function(r) { return r.text; }).join(' ');
+
+          // Track date
+          var dm = line.match(dateRe);
+          if (dm && !/DATE\s*TOTAL|GRAND/i.test(line)) {
+            lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
+          }
+
+          if (!/DATE\s*TOTAL/i.test(line) || !lastDate) continue;
+
+          var qty = 0, amt = 0;
+          row.forEach(function(r) {
+            var v = parseFloat(String(r.text).replace(/,/g, ''));
+            if (isNaN(v) || v < 0) return;
+            if (r.x >= COL.qty.min && r.x <= COL.qty.max) qty = v;
+            else if (r.x >= COL.amt.min && r.x <= COL.amt.max) amt = v;
+          });
+
+          // Fallback
+          if (amt === 0) {
+            var nums = [];
+            row.forEach(function(r) {
+              var v = parseFloat(String(r.text).replace(/,/g, ''));
+              if (!isNaN(v) && v > 0) nums.push({ x: r.x, v: v });
+            });
+            nums.sort(function(a, b) { return a.x - b.x; });
+            if (nums.length >= 1) amt = nums[nums.length - 1].v;
+            if (nums.length >= 2 && qty === 0) qty = nums[0].v;
+          }
+
+          if (amt > 0) {
+            var dup = false;
+            for (var di = 0; di < results.length; di++) {
+              if (results[di].date === lastDate) { dup = true; break; }
+            }
+            if (!dup) {
+              results.push({
+                date: lastDate,
+                qty: Math.round(qty * 100) / 100,
+                amount: Math.round(amt * 100) / 100
+              });
+            }
+          }
+        }
+        return nextPage();
+      });
+    });
+  }
+  return nextPage();
+}
+
+function _showLocalSalePDFPreview(results, fileName) {
+  var totalAmt = 0, totalQty = 0;
+  results.forEach(function(r) {
+    totalAmt += r.amount;
+    totalQty += r.qty;
+  });
+
+  var trows = results.map(function(r, i) {
+    return '<tr style="border-top:1px solid var(--border)">'
+      + '<td style="padding:7px 10px;font-size:11px;color:var(--sub)">' + (i + 1) + '</td>'
+      + '<td style="padding:7px 10px;font-weight:600;font-size:12px">' + fmtD(r.date) + '</td>'
+      + '<td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted)">' + r.qty.toLocaleString('en-IN') + '</td>'
+      + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--red)">₹' + fmt(r.amount) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var tableEl = document.getElementById('local-pdf-preview-table');
+  if (tableEl) {
+    tableEl.innerHTML =
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="background:var(--bg)">'
+      + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted)">#</th>'
+      + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted)">Date</th>'
+      + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Qty</th>'
+      + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Amount</th>'
+      + '</tr></thead><tbody>' + trows + '</tbody></table>';
+  }
+
+  var countEl = document.getElementById('local-pdf-found-count');
+  var totalEl = document.getElementById('local-pdf-total-amt');
+  var qtyEl   = document.getElementById('local-pdf-total-qty');
+  var nameEl  = document.getElementById('local-pdf-file-name');
+  var step1   = document.getElementById('local-pdf-step-1');
+  var step2   = document.getElementById('local-pdf-step-2');
+  var btn     = document.getElementById('local-pdf-import-btn');
+
+  if (countEl) countEl.textContent = results.length + ' days';
+  if (totalEl) totalEl.textContent = '₹' + fmt(totalAmt);
+  if (qtyEl)   qtyEl.textContent   = totalQty.toLocaleString('en-IN');
+  if (nameEl)  nameEl.textContent  = fileName || '';
+  if (step1)   step1.style.display = 'none';
+  if (step2)   step2.style.display = '';
+  if (btn)     btn.style.display   = '';
+
+  toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
+}
+
+function importLocalSalePDF() {
+  if (!_localPdfParsed || !_localPdfParsed.length) {
+    toast('Koi entries nahi hain', 'warning'); return;
+  }
+
+  var rows = _localPdfParsed.map(function(r) {
+    return {
+      date:   r.date,
+      party:  'LOCAL SALE',
+      qty:    r.qty,
+      amount: r.amount
+    };
+  });
+
+  var btn = document.getElementById('local-pdf-import-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+  }
+
+  _api('bulkSaveSale', { entries: rows, source: 'PDF_LOCAL' },
+    function(res) {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+      }
+      if (res && res.success) {
+        closeModal('m-sal');
+        _localPdfParsed = [];
+        toast('✅ ' + (res.saved || rows.length) + ' LOCAL SALE entries save/update ho gayin!'
+          + (res.updated ? ' (' + res.updated + ' updated)' : ''), 'success');
+        _loadData(false);
+      } else {
+        toast('❌ ' + (res && res.error ? res.error : 'Import failed'), 'error');
+      }
+    },
+    function() {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+      }
+      toast('❌ Network error', 'error');
+    }
+  );
+}
