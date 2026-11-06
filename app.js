@@ -2862,7 +2862,6 @@ function _showLocalSalePDFPreview(results, fileName) {
 }
 
 
-
 function importLocalSalePDF() {
   if (!_localPdfParsed || !_localPdfParsed.length) {
     toast('Koi entries nahi hain', 'warning'); return;
@@ -2890,10 +2889,14 @@ function importLocalSalePDF() {
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
       if (res && res.success) {
+        var msg = '✅ ' + ((res.saved || 0) + (res.updated || 0)) + ' LOCAL SALE entries';
+        if (res.saved) msg += ' (' + res.saved + ' new)';
+        if (res.updated) msg += ' (' + res.updated + ' updated)';
+        toast(msg, 'success');
+
+        // Reset + close
+        localPdfReset();
         closeModal('m-sal');
-        _localPdfParsed = [];
-        toast('✅ ' + (res.saved || rows.length) + ' LOCAL SALE entries save/update ho gayin!'
-          + (res.updated ? ' (' + res.updated + ' updated)' : ''), 'success');
         _loadData(false);
       } else {
         toast('❌ ' + (res && res.error ? res.error : 'Import failed'), 'error');
@@ -2908,6 +2911,7 @@ function importLocalSalePDF() {
     }
   );
 }
+
 
 function localSubTab(tab) {
   var manualBtn  = document.getElementById('local-sub-manual');
