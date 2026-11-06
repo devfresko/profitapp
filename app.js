@@ -2699,9 +2699,10 @@ function _localParseDateTotals(pdf, onProgress) {
   var grandAmt = 0;
   var grandQty = 0;
 
+  // X bands — Local Sale Register
   var COL = {
-    qty: { min: 290, max: 340 },
-    amt: { min: 500, max: 580 }
+    qty: { min: 280, max: 350 },
+    amt: { min: 480, max: 600 }
   };
 
   function nextPage() {
@@ -2742,7 +2743,7 @@ function _localParseDateTotals(pdf, onProgress) {
           row.sort(function(a, b) { return a.x - b.x; });
           var line = row.map(function(r) { return r.text; }).join(' ');
 
-          // Track date
+          // Track date from any line
           var dm = line.match(dateRe);
           if (dm && !/DATE\s*TOTAL|GRAND/i.test(line)) {
             lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
@@ -2752,25 +2753,25 @@ function _localParseDateTotals(pdf, onProgress) {
           var isGrandTotal = /GRAND\s*TOTAL/i.test(line);
           if (!isDateTotal && !isGrandTotal) continue;
 
-          var qty = 0, amt = 0;
+          // Collect numbers with X
+          var nums = [];
           row.forEach(function(r) {
             var v = parseFloat(String(r.text).replace(/,/g, ''));
-            if (isNaN(v) || v < 0) return;
-            if (r.x >= COL.qty.min && r.x <= COL.qty.max) qty = v;
-            else if (r.x >= COL.amt.min && r.x <= COL.amt.max) amt = v;
+            if (!isNaN(v) && v >= 0) nums.push({ x: r.x, v: v });
+          });
+          nums.sort(function(a, b) { return a.x - b.x; });
+
+          var qty = 0, amt = 0;
+
+          // Prefer X-band
+          nums.forEach(function(n) {
+            if (n.x >= COL.qty.min && n.x <= COL.qty.max) qty = n.v;
+            else if (n.x >= COL.amt.min && n.x <= COL.amt.max) amt = n.v;
           });
 
-          // Fallback: rightmost positive number = amount
-          if (amt === 0) {
-            var nums = [];
-            row.forEach(function(r) {
-              var v = parseFloat(String(r.text).replace(/,/g, ''));
-              if (!isNaN(v) && v > 0) nums.push({ x: r.x, v: v });
-            });
-            nums.sort(function(a, b) { return a.x - b.x; });
-            if (nums.length) amt = nums[nums.length - 1].v;
-            if (nums.length >= 2 && qty === 0) qty = nums[0].v;
-          }
+          // Fallback: leftmost = qty, rightmost = amount
+          if (nums.length >= 1 && amt === 0) amt = nums[nums.length - 1].v;
+          if (nums.length >= 2 && qty === 0) qty = nums[0].v;
 
           if (isGrandTotal) {
             if (amt > 0) grandAmt = Math.round(amt * 100) / 100;
@@ -2800,14 +2801,19 @@ function _localParseDateTotals(pdf, onProgress) {
   return nextPage();
 }
 
+
 function _showLocalSalePDFPreview(results, fileName) {
-// Single day + GRAND TOTAL available → GRAND TOTAL use karo
   var gAmt = results._grandAmt || 0;
   var gQty = results._grandQty || 0;
+
+  // Single-day PDF → GRAND TOTAL authoritative (DATE TOTAL often wrong)
   if (results.length === 1 && gAmt > 0) {
     results[0].amount = gAmt;
     if (gQty > 0) results[0].qty = gQty;
   }
+
+  // Multi-day: if sum of DATE TOTAL differs a lot from GRAND TOTAL, still use daily
+  // (GRAND is only for validation / single-day)
 
   var totalAmt = 0, totalQty = 0;
   results.forEach(function(r) {
@@ -2854,6 +2860,8 @@ function _showLocalSalePDFPreview(results, fileName) {
 
   toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
 }
+
+
 
 function importLocalSalePDF() {
   if (!_localPdfParsed || !_localPdfParsed.length) {
