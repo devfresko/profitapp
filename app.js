@@ -37,7 +37,7 @@ let _lastChange = '0';
 ───────────────────────────────────────────────────────── */
 
 // ⚠️  GAS deployment URL yahan daalo (Deploy → New → Web App → Anyone)
-var API = 'https://script.google.com/macros/s/AKfycbxpswyBDVYJZE003Wp8GHeDxB1ekZDVbi18H80S28flO28DywspqeNt2w-hNQrNFwf4/exec';
+var API = 'https://script.google.com/macros/s/AKfycbya31MrAEit64iknKL1WEW6UQIRzv14LIfxf5tMs1Tz80QNldD5ybWLUbwHvzaq5is/exec';
 
 var _cbIdx = 0;
 
@@ -280,32 +280,8 @@ function _setUserUI() {
   const ini = (parts.length >= 2 ? parts[0][0] + parts[parts.length-1][0] : parts[0].slice(0,2)).toUpperCase();
   const av = document.getElementById('sb-avatar'); if(av) av.textContent = ini;
   const un = document.getElementById('sb-uname'); if(un) un.textContent = name;
-  const role = (USER.role || 'STAFF').toUpperCase();
-  const rl = document.getElementById('sb-role'); if(rl) rl.textContent = role;
-  // Apply role classes for CSS + visibility
-  if (typeof setUserRole === 'function') setUserRole(role);
-  else {
-    const sb = document.getElementById('sb');
-    if (sb) {
-      sb.classList.remove('role-owner','role-manager','role-staff');
-      if (role === 'OWNER' || role === 'ADMIN') sb.classList.add('role-owner');
-      else if (role === 'MANAGER') sb.classList.add('role-manager');
-      else sb.classList.add('role-staff');
-    }
-  }
+  const rl = document.getElementById('sb-role'); if(rl) rl.textContent = (USER.role||'USER').toUpperCase();
 }
-
-/* ── ROLE HELPERS ── */
-function isStaff() {
-  const r = (USER && USER.role || '').toUpperCase();
-  return r === 'STAFF' || r === 'USER' || !r;
-}
-function isManagerOrOwner() {
-  const r = (USER && USER.role || '').toUpperCase();
-  return r === 'OWNER' || r === 'ADMIN' || r === 'MANAGER';
-}
-function canCRUD() { return isManagerOrOwner(); }
-
 
 function _populateMonths() {
   const sel = document.getElementById('exp-month');
@@ -388,7 +364,6 @@ const VIEW_META = {
   monthly:   { title:'Monthly P&L',       crumb:'Reports',         addBtn:null },
   analysis:  { title:'Party Analysis',    crumb:'Reports',         addBtn:null },
   insights:  { title:'Insights',          crumb:'Reports',         addBtn:null },
-  approvals: { title:'Pending Approvals', crumb:'Admin',           addBtn:null },
 };
 
 function goTo(v, rerender) {
@@ -419,11 +394,6 @@ function goTo(v, rerender) {
 
   UI.view = v;
 
-  // Role-aware Add button: STAFF cannot add directly
-  if (meta.addBtn && isStaff()) {
-    addBtn.style.display = 'none';
-  }
-
   // render view
   if (!rerender && !DB._loaded) return; // data not loaded yet
   if (v === 'dashboard')  renderDashboard();
@@ -434,7 +404,6 @@ function goTo(v, rerender) {
   else if (v === 'monthly')  renderMonthly();
   else if (v === 'analysis') renderAnalysis();
   else if (v === 'insights') renderInsights();
-  else if (v === 'approvals') renderApprovals();
 }
 
 function openAddModal() {
@@ -3329,179 +3298,3 @@ function importSupplySalePDF() {
 
   sendNext();
 }
-
-
-/* ═══════════════════════════════════════════════════════════
-   APPROVALS VIEW (Owner / Manager only)
-═══════════════════════════════════════════════════════════ */
-function renderApprovals() {
-  if (!isManagerOrOwner()) {
-    const v = document.getElementById('v-approvals');
-    if (v) v.innerHTML = `<div class="empty"><i class="fas fa-lock"></i><p>Access Denied</p><small>Sirf Owner / Manager is page ko dekh sakte hain.</small></div>`;
-    return;
-  }
-
-  const v = document.getElementById('v-approvals');
-  if (!v) return;
-
-  const requests = (DB.requests || DB.editRequests || []).slice().sort((a,b) => {
-    const ta = new Date(a.createdAt || a.timestamp || 0).getTime();
-    const tb = new Date(b.createdAt || b.timestamp || 0).getTime();
-    return tb - ta;
-  });
-
-  const pending = requests.filter(r => (r.status || 'PENDING').toUpperCase() === 'PENDING');
-  const others  = requests.filter(r => (r.status || '').toUpperCase() !== 'PENDING');
-
-  // Update badge
-  const badge = document.getElementById('approval-badge');
-  if (badge) {
-    if (pending.length > 0) {
-      badge.style.display = 'inline-flex';
-      badge.textContent = pending.length;
-    } else {
-      badge.style.display = 'none';
-    }
-  }
-
-  let html = _pageHd('Pending Approvals', 'STAFF se aaye edit requests — Approve / Reject karein',
-    `<button class="btn btn-secondary btn-sm" onclick="doRefresh()"><i class="fas fa-sync-alt"></i> Refresh</button>`);
-
-  // Filters
-  html += `<div class="filter-bar">
-    <div class="filter-presets">
-      <button class="preset-btn active" onclick="filterApprovals('PENDING')">Pending (${pending.length})</button>
-      <button class="preset-btn" onclick="filterApprovals('ALL')">All</button>
-      <button class="preset-btn" onclick="filterApprovals('APPROVED')">Approved</button>
-      <button class="preset-btn" onclick="filterApprovals('REJECTED')">Rejected</button>
-    </div>
-  </div>`;
-
-  if (!requests.length) {
-    html += _empty('Koi request nahi hai', 'STAFF jab edit request raise karega to yahan dikhega');
-    v.innerHTML = html;
-    return;
-  }
-
-  const rows = requests.map(r => {
-    const status = (r.status || 'PENDING').toUpperCase();
-    let badgeCls = 'req-pending';
-    if (status === 'APPROVED') badgeCls = 'req-approved';
-    if (status === 'REJECTED') badgeCls = 'req-rejected';
-
-    const actions = status === 'PENDING' ? `
-      <button class="btn btn-green btn-sm" onclick="approveRequest('${r.id || r._id}')"><i class="fas fa-check"></i> Approve</button>
-      <button class="btn btn-secondary btn-sm" onclick="rejectRequest('${r.id || r._id}')"><i class="fas fa-times"></i> Reject</button>
-    ` : `<span class="badge ${badgeCls}">${status}</span>`;
-
-    return `<tr>
-      <td>${r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : (r.timestamp || '—')}</td>
-      <td>${r.requestedBy || r.userName || '—'}</td>
-      <td>${r.module || r.type || '—'}</td>
-      <td style="max-width:220px;white-space:normal">${r.reason || r.message || '—'}</td>
-      <td>${r.ref || r.reference || '—'}</td>
-      <td><span class="badge ${badgeCls}">${status}</span></td>
-      <td style="white-space:nowrap">${actions}</td>
-    </tr>`;
-  }).join('');
-
-  html += _tbl(
-    _th('Date') + _th('Requested By') + _th('Module') + _th('Reason') + _th('Ref') + _th('Status') + _th('Action'),
-    rows
-  );
-
-  v.innerHTML = html;
-}
-
-function filterApprovals(status) {
-  // Simple client-side filter re-render (can be enhanced)
-  renderApprovals();
-}
-
-function submitEditRequest() {
-  const reason = (document.getElementById('req-reason') || {}).value || '';
-  const ref    = (document.getElementById('req-ref') || {}).value || '';
-  if (!reason.trim()) {
-    toast('Reason daalna zaroori hai', 'warning');
-    return;
-  }
-  const btn = document.getElementById('req-submit');
-  if (btn) btn.classList.add('busy');
-
-  _api('submitEditRequest', {
-    reason: reason.trim(),
-    ref: ref.trim(),
-    module: UI.view || 'general',
-    requestedBy: USER ? USER.name : '',
-    userId: USER ? USER.id || USER.email : ''
-  }, res => {
-    if (btn) btn.classList.remove('busy');
-    if (res && res.success) {
-      toast('Request submit ho gaya. Owner/Manager approve karenge.', 'success');
-      closeModal('m-request-edit');
-      // clear fields
-      const r1 = document.getElementById('req-reason'); if(r1) r1.value = '';
-      const r2 = document.getElementById('req-ref'); if(r2) r2.value = '';
-    } else {
-      toast(res ? res.error : 'Request fail hua', 'error');
-    }
-  }, e => {
-    if (btn) btn.classList.remove('busy');
-    toast(e.message || 'Network error', 'error');
-  });
-}
-
-function approveRequest(id) {
-  if (!id) return;
-  Swal.fire({
-    title: 'Approve Request?',
-    text: 'Is edit request ko approve karna hai?',
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonColor: '#34A853',
-    confirmButtonText: 'Yes, Approve'
-  }).then(result => {
-    if (!result.isConfirmed) return;
-    _api('approveEditRequest', { id }, res => {
-      if (res && res.success) {
-        toast('Request approved', 'success');
-        _loadData(false, () => renderApprovals());
-      } else {
-        toast(res ? res.error : 'Failed', 'error');
-      }
-    });
-  });
-}
-
-function rejectRequest(id) {
-  if (!id) return;
-  Swal.fire({
-    title: 'Reject Request?',
-    input: 'text',
-    inputPlaceholder: 'Rejection reason (optional)',
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonColor: '#EA4335',
-    confirmButtonText: 'Reject'
-  }).then(result => {
-    if (!result.isConfirmed) return;
-    _api('rejectEditRequest', { id, reason: result.value || '' }, res => {
-      if (res && res.success) {
-        toast('Request rejected', 'success');
-        _loadData(false, () => renderApprovals());
-      } else {
-        toast(res ? res.error : 'Failed', 'error');
-      }
-    });
-  });
-}
-
-// Helper for STAFF: open request modal instead of direct edit
-function requestEditFor(module, ref) {
-  if (!isStaff()) return;
-  const refEl = document.getElementById('req-ref');
-  if (refEl) refEl.value = ref || '';
-  openModal('m-request-edit');
-}
-
-
