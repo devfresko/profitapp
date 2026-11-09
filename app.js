@@ -37,7 +37,7 @@ let _lastChange = '0';
 ───────────────────────────────────────────────────────── */
 
 // ⚠️  GAS deployment URL yahan daalo (Deploy → New → Web App → Anyone)
-var API = 'https://script.google.com/macros/s/AKfycbzyldthRoDcOwnz63k_nT908T4lC5R9Wq7XncXffhMQ-RBPXkaFuIEWW79R8D4yQOPJ/exec';
+var API = 'https://script.google.com/macros/s/AKfycbya31MrAEit64iknKL1WEW6UQIRzv14LIfxf5tMs1Tz80QNldD5ybWLUbwHvzaq5is/exec';
 
 var _cbIdx = 0;
 
@@ -2806,14 +2806,11 @@ function _showLocalSalePDFPreview(results, fileName) {
   var gAmt = results._grandAmt || 0;
   var gQty = results._grandQty || 0;
 
-  // Single-day PDF → GRAND TOTAL authoritative (DATE TOTAL often wrong)
+  // Single-day PDF → GRAND TOTAL authoritative (DATE TOTAL often wrong in software)
   if (results.length === 1 && gAmt > 0) {
     results[0].amount = gAmt;
     if (gQty > 0) results[0].qty = gQty;
   }
-
-  // Multi-day: if sum of DATE TOTAL differs a lot from GRAND TOTAL, still use daily
-  // (GRAND is only for validation / single-day)
 
   var totalAmt = 0, totalQty = 0;
   results.forEach(function(r) {
@@ -2825,8 +2822,10 @@ function _showLocalSalePDFPreview(results, fileName) {
     return '<tr style="border-top:1px solid var(--border)">'
       + '<td style="padding:7px 10px;font-size:11px;color:var(--sub)">' + (i + 1) + '</td>'
       + '<td style="padding:7px 10px;font-weight:600;font-size:12px">' + fmtD(r.date) + '</td>'
-      + '<td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted)">' + r.qty.toLocaleString('en-IN') + '</td>'
-      + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--red)">₹' + fmt(r.amount) + '</td>'
+      + '<td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted)">'
+      + r.qty.toLocaleString('en-IN') + '</td>'
+      + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--red)">₹'
+      + fmt(r.amount) + '</td>'
       + '</tr>';
   }).join('');
 
@@ -2858,7 +2857,17 @@ function _showLocalSalePDFPreview(results, fileName) {
   if (step2)   step2.style.display = '';
   if (btn)     btn.style.display   = '';
 
-  toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
+  // Multi-day: show GRAND TOTAL reference if available & differs
+  if (results.length > 1 && gAmt > 0) {
+    var diff = Math.abs(totalAmt - gAmt);
+    if (diff > 1) {
+      toast('⚠️ Daily sum ₹' + fmt(totalAmt) + ' · PDF Grand ₹' + fmt(gAmt), 'warning');
+    } else {
+      toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
+    }
+  } else {
+    toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
+  }
 }
 
 
