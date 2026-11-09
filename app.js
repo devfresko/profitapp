@@ -2691,7 +2691,7 @@ function _processLocalSalePDF(file) {
 }
 
 function _localParseDateTotals(pdf, onProgress) {
-  var results = [];
+  var dayMap = {}; // date → {qty, amount}
   var pageNum = 0;
   var total = pdf.numPages;
   var lastDate = null;
@@ -2699,15 +2699,16 @@ function _localParseDateTotals(pdf, onProgress) {
   var grandAmt = 0;
   var grandQty = 0;
 
-  // X bands — Local Sale Register
-  var COL = {
-    qty: { min: 280, max: 350 },
-    amt: { min: 480, max: 600 }
-  };
-
   function nextPage() {
     pageNum++;
     if (pageNum > total) {
+      var results = Object.keys(dayMap).sort().map(function(d) {
+        return {
+          date: d,
+          qty: Math.round(dayMap[d].qty * 100) / 100,
+          amount: Math.round(dayMap[d].amount * 100) / 100
+        };
+      });
       results._grandAmt = grandAmt;
       results._grandQty = grandQty;
       return Promise.resolve(results);
@@ -2743,55 +2744,58 @@ function _localParseDateTotals(pdf, onProgress) {
           row.sort(function(a, b) { return a.x - b.x; });
           var line = row.map(function(r) { return r.text; }).join(' ');
 
-          // Track date from any line
+          // Track date
           var dm = line.match(dateRe);
-          if (dm && !/DATE\s*TOTAL|GRAND/i.test(line)) {
+          if (dm && !/DATE\s*TOTAL|GRAND|FROM|TO DATE/i.test(line)) {
             lastDate = dm[3] + '-' + dm[2] + '-' + dm[1];
           }
 
-          var isDateTotal  = /DATE\s*TOTAL/i.test(line);
-          var isGrandTotal = /GRAND\s*TOTAL/i.test(line);
-          if (!isDateTotal && !isGrandTotal) continue;
-
-          // Collect numbers with X
-          var nums = [];
-          row.forEach(function(r) {
-            var v = parseFloat(String(r.text).replace(/,/g, ''));
-            if (!isNaN(v) && v >= 0) nums.push({ x: r.x, v: v });
-          });
-          nums.sort(function(a, b) { return a.x - b.x; });
-
-          var qty = 0, amt = 0;
-
-          // Prefer X-band
-          nums.forEach(function(n) {
-            if (n.x >= COL.qty.min && n.x <= COL.qty.max) qty = n.v;
-            else if (n.x >= COL.amt.min && n.x <= COL.amt.max) amt = n.v;
-          });
-
-          // Fallback: leftmost = qty, rightmost = amount
-          if (nums.length >= 1 && amt === 0) amt = nums[nums.length - 1].v;
-          if (nums.length >= 2 && qty === 0) qty = nums[0].v;
-
-          if (isGrandTotal) {
-            if (amt > 0) grandAmt = Math.round(amt * 100) / 100;
-            if (qty > 0) grandQty = Math.round(qty * 100) / 100;
+          // GRAND TOTAL
+          if (/GRAND\s*TOTAL/i.test(line)) {
+            var gNums = [];
+            row.forEach(function(r) {
+              var v = parseFloat(String(r.text).replace(/,/g, ''));
+              if (!isNaN(v) && v > 0) gNums.push({ x: r.x, v: v });
+            });
+            gNums.sort(function(a, b) { return a.x - b.x; });
+            if (gNums.length) {
+              grandAmt = Math.round(gNums[gNums.length - 1].v * 100) / 100;
+              if (gNums.length >= 2) grandQty = Math.round(gNums[0].v * 100) / 100;
+            }
             continue;
           }
 
-          // DATE TOTAL
-          if (amt > 0 && lastDate) {
-            var dup = false;
-            for (var di = 0; di < results.length; di++) {
-              if (results[di].date === lastDate) { dup = true; break; }
-            }
-            if (!dup) {
-              results.push({
-                date: lastDate,
-                qty: Math.round(qty * 100) / 100,
-                amount: Math.round(amt * 100) / 100
-              });
-            }
+          // Skip headers / totals
+          if (/DATE\s*TOTAL|Purchase Date|Item Name|AC CODE|Page \d/i.test(line)) continue;
+          if (!lastDate) continue;
+
+          // Line item: has numbers, take rightmost as Amount, leftmost small as Qty
+          var nums = [];
+          row.forEach(function(r) {
+            var v = parseFloat(String(r.text).replace(/,/g, ''));
+            if (!isNaN(v) && v > 0) nums.push({ x: r.x, v: v });
+          });
+          if (nums.length < 1) continue;
+          nums.sort(function(a, b) { return a.x - b.x; });
+
+          // Amount = rightmost number (x > 450 typically)
+          var amt = 0, qty = 0;
+          var rightMost = nums[nums.length - 1];
+          if (rightMost.x >= 450) {
+            amt = rightMost.v;
+          } else {
+            continue; // not a line item with amount
+          }
+
+          // Qty = number in qty band (x 280-360) if present
+          nums.forEach(function(n) {
+            if (n.x >= 280 && n.x <= 360 && n.v !== amt) qty = n.v;
+          });
+
+          if (amt > 0 && amt < 10000000) { // sanity
+            if (!dayMap[lastDate]) dayMap[lastDate] = { qty: 0, amount: 0 };
+            dayMap[lastDate].amount += amt;
+            dayMap[lastDate].qty += qty;
           }
         }
         return nextPage();
@@ -2806,17 +2810,33 @@ function _showLocalSalePDFPreview(results, fileName) {
   var gAmt = results._grandAmt || 0;
   var gQty = results._grandQty || 0;
 
-  // Single-day PDF → GRAND TOTAL authoritative (DATE TOTAL often wrong in software)
+  // Single day → always use GRAND
   if (results.length === 1 && gAmt > 0) {
     results[0].amount = gAmt;
     if (gQty > 0) results[0].qty = gQty;
   }
 
+  // Multi-day: if GRAND available and our sum is way off, scale last day OR show warning
+  // Prefer showing true line-item sum; if GRAND matches within 1%, use as-is
   var totalAmt = 0, totalQty = 0;
   results.forEach(function(r) {
     totalAmt += r.amount;
     totalQty += r.qty;
   });
+
+  // If GRAND TOTAL exists and differs, trust GRAND for display total
+  // and distribute difference is complex — better show both
+  var displayAmt = totalAmt;
+  var displayQty = totalQty;
+  if (gAmt > 0 && results.length >= 1) {
+    // If line-item sum is within 2% of grand, fine
+    // If single day already handled; for multi use line items
+    // User wants GRAND → if only grand is reliable source for final number:
+    if (results.length === 1) {
+      displayAmt = gAmt;
+      displayQty = gQty || totalQty;
+    }
+  }
 
   var trows = results.map(function(r, i) {
     return '<tr style="border-top:1px solid var(--border)">'
@@ -2850,30 +2870,25 @@ function _showLocalSalePDFPreview(results, fileName) {
   var btn     = document.getElementById('local-pdf-import-btn');
 
   if (countEl) countEl.textContent = results.length + ' days';
-  if (totalEl) totalEl.textContent = '₹' + fmt(totalAmt);
-  if (qtyEl)   qtyEl.textContent   = totalQty.toLocaleString('en-IN');
+  if (totalEl) totalEl.textContent = '₹' + fmt(displayAmt);
+  if (qtyEl)   qtyEl.textContent   = displayQty.toLocaleString('en-IN');
   if (nameEl)  nameEl.textContent  = fileName || '';
   if (step1)   step1.style.display = 'none';
   if (step2)   step2.style.display = '';
   if (btn)     btn.style.display   = '';
 
-  // Multi-day: show GRAND TOTAL reference if available & differs
-  if (results.length > 1 && gAmt > 0) {
-    var diff = Math.abs(totalAmt - gAmt);
-    if (diff > 1) {
-      toast('⚠️ Daily sum ₹' + fmt(totalAmt) + ' · PDF Grand ₹' + fmt(gAmt), 'warning');
-    } else {
-      toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
-    }
+  if (gAmt > 0 && Math.abs(totalAmt - gAmt) > 1) {
+    toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt) + ' (PDF Grand ₹' + fmt(gAmt) + ')', 'success');
   } else {
-    toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
+    toast('✅ ' + results.length + ' din · ₹' + fmt(displayAmt), 'success');
   }
 }
 
 
 function importLocalSalePDF() {
   if (!_localPdfParsed || !_localPdfParsed.length) {
-    toast('Koi entries nahi hain', 'warning'); return;
+    toast('Koi entries nahi hain', 'warning');
+    return;
   }
 
   var rows = _localPdfParsed.map(function(r) {
@@ -2897,26 +2912,33 @@ function importLocalSalePDF() {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
-      if (res && res.success) {
-        var msg = '✅ ' + ((res.saved || 0) + (res.updated || 0)) + ' LOCAL SALE entries';
-        if (res.saved) msg += ' (' + res.saved + ' new)';
-        if (res.updated) msg += ' (' + res.updated + ' updated)';
-        toast(msg, 'success');
 
-        // Reset + close
+      if (res && res.success) {
+        var total = (res.saved || 0) + (res.updated || 0);
+        var msg = '✅ ' + total + ' LOCAL SALE entries save ho gayin!';
+        if (res.saved)   msg += ' (' + res.saved + ' new)';
+        if (res.updated) msg += ' (' + res.updated + ' updated)';
+
+        // Strong feedback
+        toast(msg, 'success');
+        alert(msg); // temporary — user clearly dekhe
+
         localPdfReset();
         closeModal('m-sal');
         _loadData(false);
       } else {
-        toast('❌ ' + (res && res.error ? res.error : 'Import failed'), 'error');
+        var errMsg = (res && res.error) ? res.error : 'Import failed';
+        toast('❌ ' + errMsg, 'error');
+        alert('❌ Import failed: ' + errMsg);
       }
     },
-    function() {
+    function(err) {
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
       toast('❌ Network error', 'error');
+      alert('❌ Network error — check console');
     }
   );
 }
