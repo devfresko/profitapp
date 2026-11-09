@@ -2884,14 +2884,13 @@ function _showLocalSalePDFPreview(results, fileName) {
   }
 }
 
-
 function importLocalSalePDF() {
   if (!_localPdfParsed || !_localPdfParsed.length) {
     toast('Koi entries nahi hain', 'warning');
     return;
   }
 
-  var rows = _localPdfParsed.map(function(r) {
+  var allRows = _localPdfParsed.map(function(r) {
     return {
       date:   r.date,
       party:  'LOCAL SALE',
@@ -2906,41 +2905,65 @@ function importLocalSalePDF() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
   }
 
-  _api('bulkSaveSale', { entries: rows, source: 'PDF_LOCAL' },
-    function(res) {
+  var BATCH_SIZE = 20; // safe for JSONP URL length
+  var batches = [];
+  for (var i = 0; i < allRows.length; i += BATCH_SIZE) {
+    batches.push(allRows.slice(i, i + BATCH_SIZE));
+  }
+
+  var totalSaved = 0;
+  var totalUpdated = 0;
+  var errors = [];
+  var done = 0;
+
+  function sendNext() {
+    if (done >= batches.length) {
+      // All done
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
-
-      if (res && res.success) {
-        var total = (res.saved || 0) + (res.updated || 0);
-        var msg = '✅ ' + total + ' LOCAL SALE entries save ho gayin!';
-        if (res.saved)   msg += ' (' + res.saved + ' new)';
-        if (res.updated) msg += ' (' + res.updated + ' updated)';
-
-        // Strong feedback
-        toast(msg, 'success');
-        alert(msg); // temporary — user clearly dekhe
-
-        localPdfReset();
-        closeModal('m-sal');
-        _loadData(false);
-      } else {
-        var errMsg = (res && res.error) ? res.error : 'Import failed';
-        toast('❌ ' + errMsg, 'error');
-        alert('❌ Import failed: ' + errMsg);
+      if (errors.length && totalSaved + totalUpdated === 0) {
+        toast('❌ Import failed: ' + errors[0], 'error');
+        return;
       }
-    },
-    function(err) {
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
-      }
-      toast('❌ Network error', 'error');
-      alert('❌ Network error — check console');
+      var msg = '✅ ' + (totalSaved + totalUpdated) + ' LOCAL SALE entries save ho gayin!';
+      if (totalSaved)   msg += ' (' + totalSaved + ' new)';
+      if (totalUpdated) msg += ' (' + totalUpdated + ' updated)';
+      if (errors.length) msg += ' · ' + errors.length + ' batch errors';
+      toast(msg, 'success');
+      localPdfReset();
+      closeModal('m-sal');
+      _loadData(false);
+      return;
     }
-  );
+
+    var batch = batches[done];
+    if (btn) {
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (done + 1) + '/' + batches.length;
+    }
+
+    _api('bulkSaveSale', { entries: batch, source: 'PDF_LOCAL' },
+      function(res) {
+        done++;
+        if (res && res.success) {
+          totalSaved   += (res.saved || 0);
+          totalUpdated += (res.updated || 0);
+        } else {
+          errors.push((res && res.error) ? res.error : 'batch failed');
+        }
+        // Small delay to avoid hammering GAS
+        setTimeout(sendNext, 300);
+      },
+      function() {
+        done++;
+        errors.push('network');
+        setTimeout(sendNext, 300);
+      }
+    );
+  }
+
+  sendNext();
 }
 
 
