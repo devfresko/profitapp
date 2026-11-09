@@ -1207,42 +1207,120 @@
     </div>
 
     <!-- ── BULK SUPPLY ── -->
-    <div id="sal-panel-supply" style="display:none">
-      <div style="padding:10px 16px;background:var(--green-l);border-bottom:1px solid var(--border);
-                  font-size:12px;color:var(--green-d);font-weight:600">
-        <i class="fas fa-truck" style="margin-right:6px"></i>SUPPLY SALE — Month-wise date-by-date entry
+      <div id="sal-panel-supply" style="display:none">
+      <!-- Sub-tabs: Manual | PDF -->
+      <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
+        <button id="supply-sub-manual" onclick="supplySubTab('manual')"
+          style="flex:1;padding:9px;font-size:11px;font-weight:700;border:none;cursor:pointer;
+                 border-bottom:2px solid var(--green);color:var(--green);background:transparent">
+          <i class="fas fa-keyboard" style="margin-right:5px"></i>Manual Entry
+        </button>
+        <button id="supply-sub-pdf" onclick="supplySubTab('pdf')"
+          style="flex:1;padding:9px;font-size:11px;font-weight:600;border:none;cursor:pointer;
+                 border-bottom:2px solid transparent;color:var(--muted);background:transparent">
+          <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
+        </button>
       </div>
-      <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
-        <input class="form-input" type="month" id="supply-month" style="width:160px;flex:none"
-          oninput="salBuildRows('supply')">
-        <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
-      </div>
-      <div id="supply-table-wrap"
-        style="max-height:320px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead>
-            <tr style="background:var(--bg)">
-              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
-              <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
-              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
-              <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
-              <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
-            </tr>
-          </thead>
-          <tbody id="supply-tbody"></tbody>
-        </table>
-        <div id="supply-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
-          Upar month select karein
+
+      <!-- MANUAL SUB-PANEL -->
+      <div id="supply-sub-panel-manual">
+        <div style="padding:10px 16px;background:var(--green-l);border-bottom:1px solid var(--border);
+                    font-size:12px;color:var(--green);font-weight:600">
+          <i class="fas fa-truck" style="margin-right:6px"></i>SUPPLY SALE — Month-wise date-by-date entry
+        </div>
+        <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
+          <input class="form-input" type="month" id="supply-month" style="width:160px;flex:none"
+            oninput="salBuildRows('supply')">
+          <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
+        </div>
+        <div id="supply-table-wrap"
+          style="max-height:280px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="background:var(--bg)">
+                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
+                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
+                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
+                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
+                <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
+              </tr>
+            </thead>
+            <tbody id="supply-tbody"></tbody>
+          </table>
+          <div id="supply-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
+            Upar month select karein
+          </div>
+        </div>
+        <div id="supply-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--muted)">Total Amount</span>
+            <span id="supply-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
+          </div>
         </div>
       </div>
-      <div id="supply-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:12px;color:var(--muted)">Total Amount</span>
-          <span id="supply-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
+
+      <!-- PDF SUB-PANEL -->
+      <div id="supply-sub-panel-pdf" style="display:none">
+        <!-- Step 1: Dropzone -->
+        <div id="supply-pdf-step-1">
+          <div id="supply-pdf-dropzone"
+            style="margin:16px;border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
+                   text-align:center;cursor:pointer;transition:all .2s"
+            ondragover="event.preventDefault();this.style.borderColor='var(--green)';this.style.background='var(--green-l)'"
+            ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
+            ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';handleSupplyPDFDrop(event)"
+            onclick="document.getElementById('supply-pdf-file-input').click()">
+            <i class="fas fa-file-pdf" style="font-size:32px;color:var(--green);margin-bottom:10px;display:block"></i>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">
+              SUPPLY / BILL PDF yahan drop karo
+            </div>
+            <div style="font-size:11px;color:var(--muted)">Invoice PDF · Net Amt date-wise sum hoga</div>
+            <input type="file" id="supply-pdf-file-input" accept="application/pdf" style="display:none"
+              onchange="handleSupplyPDFFileSelect(this)">
+          </div>
+          <div id="supply-pdf-loading" style="display:none;text-align:center;padding:40px 20px">
+            <div class="spin-ring" style="margin:0 auto 12px"></div>
+            <div style="font-size:13px;color:var(--muted)">PDF read ho raha hai…</div>
+            <div id="supply-pdf-loading-page" style="font-size:11px;color:var(--sub);margin-top:4px"></div>
+          </div>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
-          <span style="font-size:11px;color:var(--muted)">Non-zero entries</span>
-          <span id="supply-entry-count" style="font-size:12px;font-weight:700;color:var(--text)">0</span>
+
+        <!-- Step 2: Preview -->
+        <div id="supply-pdf-step-2" style="display:none">
+          <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
+                      border-bottom:1px solid var(--border);background:var(--bg)">
+            <div>
+              <span style="font-size:12px;font-weight:700;color:var(--green)">
+                <i class="fas fa-check-circle" style="margin-right:5px"></i>
+                <span id="supply-pdf-found-count">0 days</span>
+              </span>
+              <span id="supply-pdf-file-name" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
+            </div>
+            <button onclick="supplyPdfReset()" style="font-size:11px;color:var(--green);background:none;border:none;
+              cursor:pointer;font-weight:600">
+              <i class="fas fa-redo" style="margin-right:3px"></i>Change File
+            </button>
+          </div>
+
+          <div id="supply-pdf-preview-table"
+            style="max-height:240px;overflow-y:auto;padding:0 16px"></div>
+
+          <div style="margin:12px 16px;padding:12px 14px;background:var(--green-l);border-radius:10px;
+                      display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div>
+              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Amount</div>
+              <div id="supply-pdf-total-amt" style="font-size:18px;font-weight:800;color:var(--green)">₹0</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Qty</div>
+              <div id="supply-pdf-total-qty" style="font-size:15px;font-weight:700;color:var(--text)">—</div>
+            </div>
+          </div>
+
+          <div style="padding:0 16px 12px;font-size:11px;color:var(--muted)">
+            <i class="fas fa-info-circle" style="margin-right:4px"></i>
+            Same date pe agar amount badla to purani value replace ho jayegi. Source = PDF_SUPPLY.
+          </div>
         </div>
       </div>
     </div>
@@ -1270,6 +1348,9 @@
         <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
         <button class="btn btn-green btn-sm" id="supply-save-btn" onclick="saveBulkSale('supply')">
           <i class="fas fa-upload"></i> Save SUPPLY Entries
+        </button>
+        <button class="btn btn-green btn-sm" id="supply-pdf-import-btn" onclick="importSupplySalePDF()" style="display:none">
+          <i class="fas fa-upload"></i> Import All Entries
         </button>
       </div>
     </div>
