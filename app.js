@@ -3007,3 +3007,294 @@ function localPdfReset() {
   if (s2) s2.style.display = 'none';
   if (ib) ib.style.display = 'none';
 }
+
+
+
+
+/* ═══════════════════════════════════════════════════════════
+   SUPPLY SALE PDF — Invoice based (Net Amt per page → date sum)
+═══════════════════════════════════════════════════════════ */
+var _supplyPdfParsed = [];
+
+function handleSupplyPDFDrop(event) {
+  var file = event.dataTransfer.files[0];
+  if (file) _processSupplySalePDF(file);
+}
+function handleSupplyPDFFileSelect(input) {
+  var file = input.files[0];
+  if (file) _processSupplySalePDF(file);
+}
+
+function _processSupplySalePDF(file) {
+  if (!file || file.type !== 'application/pdf') {
+    toast('Sirf PDF file select karein', 'warning'); return;
+  }
+  if (typeof pdfjsLib === 'undefined') {
+    toast('PDF.js library load nahi hua', 'error'); return;
+  }
+
+  var dz = document.getElementById('supply-pdf-dropzone');
+  var ld = document.getElementById('supply-pdf-loading');
+  if (dz) dz.style.display = 'none';
+  if (ld) ld.style.display = '';
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var typedArray = new Uint8Array(e.target.result);
+    pdfjsLib.getDocument({ data: typedArray }).promise
+      .then(function(pdf) {
+        return _supplyParseInvoices(pdf, function(page, total) {
+          var el = document.getElementById('supply-pdf-loading-page');
+          if (el) el.textContent = 'Page ' + page + ' / ' + total;
+        });
+      })
+      .then(function(results) {
+        if (ld) ld.style.display = 'none';
+        if (!results.length) {
+          if (dz) dz.style.display = '';
+          toast('Invoice totals nahi mile', 'warning');
+          return;
+        }
+        _supplyPdfParsed = results;
+        _showSupplySalePDFPreview(results, file.name);
+      })
+      .catch(function(err) {
+        if (ld) ld.style.display = 'none';
+        if (dz) dz.style.display = '';
+        toast('❌ ' + (err.message || 'PDF parse failed'), 'error');
+      });
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function _supplyParseInvoices(pdf, onProgress) {
+  var dayMap = {}; // YYYY-MM-DD → {qty, amount}
+  var pageNum = 0;
+  var total = pdf.numPages;
+
+  var monthMap = {
+    january: '01', february: '02', march: '03', april: '04',
+    may: '05', june: '06', july: '07', august: '08',
+    september: '09', october: '10', november: '11', december: '12',
+    jan: '01', feb: '02', mar: '03', apr: '04', jun: '06',
+    jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+  };
+
+  // 01-April-2026  or  01/04/2026
+  var dateRe1 = /(\d{1,2})-([A-Za-z]+)-(\d{4})/;
+  var dateRe2 = /(\d{2})\/(\d{2})\/(\d{4})/;
+  var netRe   = /Net\s*Amt\s*:?\s*([\d,]+\.?\d*)/i;
+  var invRe   = /INVOICE\s*TOTAL[^\d]*([\d,]+\.?\d*)/i;
+
+  function nextPage() {
+    pageNum++;
+    if (pageNum > total) {
+      var results = Object.keys(dayMap).sort().map(function(d) {
+        return {
+          date: d,
+          qty: Math.round(dayMap[d].qty * 100) / 100,
+          amount: Math.round(dayMap[d].amount * 100) / 100
+        };
+      });
+      return Promise.resolve(results);
+    }
+    if (onProgress) onProgress(pageNum, total);
+
+    return pdf.getPage(pageNum).then(function(page) {
+      return page.getTextContent().then(function(tc) {
+        var line = tc.items.map(function(it) { return it.str; }).join(' ');
+
+        // Date
+        var dateStr = null;
+        var m1 = line.match(dateRe1);
+        if (m1) {
+          var mon = monthMap[m1[2].toLowerCase()];
+          if (mon) {
+            dateStr = m1[3] + '-' + mon + '-' + String(m1[1]).padStart(2, '0');
+          }
+        }
+        if (!dateStr) {
+          var m2 = line.match(dateRe2);
+          if (m2) dateStr = m2[3] + '-' + m2[2] + '-' + m2[1];
+        }
+
+        // Amount — prefer Net Amt, fallback INVOICE TOTAL
+        var amt = 0;
+        var nm = line.match(netRe);
+        if (nm) {
+          amt = parseFloat(nm[1].replace(/,/g, '')) || 0;
+        } else {
+          var im = line.match(invRe);
+          if (im) amt = parseFloat(im[1].replace(/,/g, '')) || 0;
+        }
+
+        if (dateStr && amt > 0) {
+          if (!dayMap[dateStr]) dayMap[dateStr] = { qty: 0, amount: 0 };
+          dayMap[dateStr].amount += amt;
+          // qty not reliably on invoice total line — leave 0 or skip
+        }
+
+        return nextPage();
+      });
+    });
+  }
+  return nextPage();
+}
+
+function _showSupplySalePDFPreview(results, fileName) {
+  var totalAmt = 0, totalQty = 0;
+  results.forEach(function(r) {
+    totalAmt += r.amount;
+    totalQty += r.qty;
+  });
+
+  var trows = results.map(function(r, i) {
+    return '<tr style="border-top:1px solid var(--border)">'
+      + '<td style="padding:7px 10px;font-size:11px;color:var(--sub)">' + (i + 1) + '</td>'
+      + '<td style="padding:7px 10px;font-weight:600;font-size:12px">' + fmtD(r.date) + '</td>'
+      + '<td style="padding:7px 10px;font-size:12px;text-align:right;color:var(--muted)">'
+      + (r.qty ? r.qty.toLocaleString('en-IN') : '—') + '</td>'
+      + '<td style="padding:7px 10px;font-weight:700;font-size:12px;text-align:right;color:var(--green)">₹'
+      + fmt(r.amount) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var tableEl = document.getElementById('supply-pdf-preview-table');
+  if (tableEl) {
+    tableEl.innerHTML =
+      '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="background:var(--bg)">'
+      + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted)">#</th>'
+      + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted)">Date</th>'
+      + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Qty</th>'
+      + '<th style="padding:7px 10px;text-align:right;font-size:10px;color:var(--muted)">Amount</th>'
+      + '</tr></thead><tbody>' + trows + '</tbody></table>';
+  }
+
+  var countEl = document.getElementById('supply-pdf-found-count');
+  var totalEl = document.getElementById('supply-pdf-total-amt');
+  var qtyEl   = document.getElementById('supply-pdf-total-qty');
+  var nameEl  = document.getElementById('supply-pdf-file-name');
+  var step1   = document.getElementById('supply-pdf-step-1');
+  var step2   = document.getElementById('supply-pdf-step-2');
+  var btn     = document.getElementById('supply-pdf-import-btn');
+
+  if (countEl) countEl.textContent = results.length + ' days';
+  if (totalEl) totalEl.textContent = '₹' + fmt(totalAmt);
+  if (qtyEl)   qtyEl.textContent   = totalQty ? totalQty.toLocaleString('en-IN') : '—';
+  if (nameEl)  nameEl.textContent  = fileName || '';
+  if (step1)   step1.style.display = 'none';
+  if (step2)   step2.style.display = '';
+  if (btn)     btn.style.display   = '';
+
+  toast('✅ ' + results.length + ' din · ₹' + fmt(totalAmt), 'success');
+}
+
+function supplyPdfReset() {
+  _supplyPdfParsed = [];
+  var fi = document.getElementById('supply-pdf-file-input');
+  if (fi) fi.value = '';
+  ['supply-pdf-dropzone', 'supply-pdf-loading', 'supply-pdf-step-1',
+   'supply-pdf-step-2', 'supply-pdf-import-btn'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'supply-pdf-dropzone' || id === 'supply-pdf-step-1') el.style.display = '';
+    else el.style.display = 'none';
+  });
+}
+
+function supplySubTab(tab) {
+  var manualBtn   = document.getElementById('supply-sub-manual');
+  var pdfBtn      = document.getElementById('supply-sub-pdf');
+  var manualPanel = document.getElementById('supply-sub-panel-manual');
+  var pdfPanel    = document.getElementById('supply-sub-panel-pdf');
+  var saveBtn     = document.getElementById('supply-save-btn');
+  var importBtn   = document.getElementById('supply-pdf-import-btn');
+
+  if (tab === 'manual') {
+    if (manualBtn) { manualBtn.style.borderBottom = '2px solid var(--green)'; manualBtn.style.color = 'var(--green)'; manualBtn.style.fontWeight = '700'; }
+    if (pdfBtn)    { pdfBtn.style.borderBottom = '2px solid transparent'; pdfBtn.style.color = 'var(--muted)'; pdfBtn.style.fontWeight = '600'; }
+    if (manualPanel) manualPanel.style.display = '';
+    if (pdfPanel)    pdfPanel.style.display = 'none';
+    if (saveBtn)     saveBtn.style.display = '';
+    if (importBtn)   importBtn.style.display = 'none';
+  } else {
+    if (pdfBtn)    { pdfBtn.style.borderBottom = '2px solid var(--green)'; pdfBtn.style.color = 'var(--green)'; pdfBtn.style.fontWeight = '700'; }
+    if (manualBtn) { manualBtn.style.borderBottom = '2px solid transparent'; manualBtn.style.color = 'var(--muted)'; manualBtn.style.fontWeight = '600'; }
+    if (manualPanel) manualPanel.style.display = 'none';
+    if (pdfPanel)    pdfPanel.style.display = '';
+    if (saveBtn)     saveBtn.style.display = 'none';
+  }
+}
+
+function importSupplySalePDF() {
+  if (!_supplyPdfParsed || !_supplyPdfParsed.length) {
+    toast('Koi entries nahi hain', 'warning'); return;
+  }
+
+  var allRows = _supplyPdfParsed.map(function(r) {
+    return {
+      date:   r.date,
+      party:  'SUPPLY SALE',
+      qty:    r.qty || 0,
+      amount: r.amount
+    };
+  });
+
+  var btn = document.getElementById('supply-pdf-import-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+  }
+
+  var BATCH_SIZE = 20;
+  var batches = [];
+  for (var i = 0; i < allRows.length; i += BATCH_SIZE) {
+    batches.push(allRows.slice(i, i + BATCH_SIZE));
+  }
+
+  var totalSaved = 0, totalUpdated = 0, errors = [], done = 0;
+
+  function sendNext() {
+    if (done >= batches.length) {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+      }
+      if (errors.length && totalSaved + totalUpdated === 0) {
+        toast('❌ Import failed: ' + errors[0], 'error');
+        return;
+      }
+      var msg = '✅ ' + (totalSaved + totalUpdated) + ' SUPPLY SALE entries save ho gayin!';
+      if (totalSaved)   msg += ' (' + totalSaved + ' new)';
+      if (totalUpdated) msg += ' (' + totalUpdated + ' updated)';
+      toast(msg, 'success');
+      supplyPdfReset();
+      closeModal('m-sal');
+      _loadData(false);
+      return;
+    }
+
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (done + 1) + '/' + batches.length;
+
+    _api('bulkSaveSale', { entries: batches[done], source: 'PDF_SUPPLY' },
+      function(res) {
+        done++;
+        if (res && res.success) {
+          totalSaved   += (res.saved || 0);
+          totalUpdated += (res.updated || 0);
+        } else {
+          errors.push((res && res.error) || 'batch failed');
+        }
+        setTimeout(sendNext, 300);
+      },
+      function() {
+        done++;
+        errors.push('network');
+        setTimeout(sendNext, 300);
+      }
+    );
+  }
+
+  sendNext();
+}
