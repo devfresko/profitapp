@@ -37,7 +37,7 @@ let _lastChange = '0';
 ───────────────────────────────────────────────────────── */
 
 // ⚠️  GAS deployment URL yahan daalo (Deploy → New → Web App → Anyone)
-var API = 'https://script.google.com/macros/s/AKfycbzkB78geTZMRdCDeeM9qJ1ZNCBzIY7wE0Zd1gZ9T0wJEdy_inJnTUSyM4dqbA0caMwI/exec';
+var API = 'https://script.google.com/macros/s/AKfycbzCtvK8eQKhjL-L2x0560RbXdBA60WSGVSjU3xLAqCMHp_gg8YXZO4wD0HXdTwO0aY9/exec';
 
 var _cbIdx = 0;
 
@@ -59,12 +59,12 @@ function _api(action, data, ok, err) {
     if (ok) ok(r);
   };
 
-  timeout = setTimeout(function() {
-    try { delete window[cbName]; } catch(e) {}
-    const sc = document.getElementById('_s_' + cbName);
-    if (sc) sc.remove();
-    if (err) err({ message: 'Request timed out. Network check karein.' });
-  }, 25000);
+timeout = setTimeout(function() {
+  try { delete window[cbName]; } catch(e) {}
+  var sc = document.getElementById('_s_' + cbName);
+  if (sc) sc.remove();
+  if (err) err({ message: 'Request timed out. Network check karein.' });
+}, 45000);  // was 25000
 
   const payload = encodeURIComponent(JSON.stringify({
     action: action,
