@@ -1962,6 +1962,7 @@ function _processPurchasePDF(file) {
 
         results.sort(function(a, b) { return a.date.localeCompare(b.date); });
         _pdfParsed = results;
+        window._pdfParsed = results;   // ← yeh line add karo
         _showPurchasePDFPreview(results, file.name);
 
         var totAmt = 0, totQty = 0;
@@ -2058,38 +2059,50 @@ function pdfReset() {
 function importPurchasePDF() {
   var rows = [];
 
-  // Memory se
-  if (_pdfParsed && _pdfParsed.length) {
-    rows = _pdfParsed.map(function(r) {
-      return { date: r.date, qty: r.qty, amount: r.netAmt };
-    });
+  // 1) Memory se (window pe bhi backup)
+  var src = (typeof _pdfParsed !== 'undefined' && _pdfParsed && _pdfParsed.length)
+    ? _pdfParsed
+    : (window._pdfParsed || []);
+
+  if (src && src.length) {
+    rows = src.map(function(r) {
+      return {
+        date:   r.date,                          // YYYY-MM-DD
+        qty:    Number(r.qty) || 0,
+        amount: Number(r.netAmt != null ? r.netAmt : r.amount) || 0
+      };
+    }).filter(function(r) { return r.date && r.amount > 0; });
   }
 
-  // DOM fallback
+  // 2) DOM fallback — preview table se padho
   if (!rows.length) {
-    var table = document.getElementById('pdf-preview-table');
-    if (table) {
-      var trs = table.querySelectorAll('tbody tr');
+    var wrap = document.getElementById('pdf-preview-table');
+    if (wrap) {
+      var trs = wrap.querySelectorAll('tbody tr');
       trs.forEach(function(tr) {
         var tds = tr.querySelectorAll('td');
-        if (tds.length >= 4) {
-          var dateTxt = (tds[1].textContent || '').trim();
-          var qty     = parseFloat((tds[2].textContent || '').replace(/[^\d.]/g, '')) || 0;
-          var amt     = parseFloat((tds[3].textContent || '').replace(/[^\d.]/g, '')) || 0;
-          if (dateTxt && amt > 0) {
-            rows.push({ date: dateTxt, qty: qty, amount: amt });
-          }
-        }
+        if (tds.length < 4) return;
+        var dateTxt = (tds[1].textContent || '').trim();
+        var qty     = parseFloat(String(tds[2].textContent || '').replace(/[^\d.]/g, '')) || 0;
+        var amt     = parseFloat(String(tds[3].textContent || '').replace(/[^\d.]/g, '')) || 0;
+        if (!dateTxt || amt <= 0) return;
+
+        // YYYY-MM-DD already, or DD/MM/YYYY → YYYY-MM-DD
+        var date = dateTxt;
+        var m = dateTxt.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (m) date = m[3] + '-' + m[2] + '-' + m[1];
+
+        rows.push({ date: date, qty: qty, amount: amt });
       });
     }
   }
+
+  console.log('[importPurchasePDF] rows:', rows.length, rows);
 
   if (!rows.length) {
     toast('Koi entries nahi hain. PDF dobara upload karein.', 'warning');
     return;
   }
-
-  console.log('Importing rows:', rows.length, rows); // debug ke liye
 
   var btn = document.getElementById('pdf-import-btn');
   if (btn) {
@@ -2109,7 +2122,8 @@ function importPurchasePDF() {
         toast('✅ ' + (res.saved || rows.length) + ' purchase entries save ho gayi!', 'success');
         _loadData(false);
       } else {
-        toast('❌ ' + (res && res.error ? res.error : 'Import failed'), 'error');
+        toast('❌ ' + ((res && res.error) ? res.error : 'Import failed'), 'error');
+        console.error('[bulkSavePurchase]', res);
       }
     },
     function(err) {
@@ -2118,6 +2132,7 @@ function importPurchasePDF() {
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
       toast('❌ Network error', 'error');
+      console.error('[bulkSavePurchase network]', err);
     }
   );
 }
