@@ -37,7 +37,7 @@ let _lastChange = '0';
 ───────────────────────────────────────────────────────── */
 
 // ⚠️  GAS deployment URL yahan daalo (Deploy → New → Web App → Anyone)
-var API = 'https://script.google.com/macros/s/AKfycbya31MrAEit64iknKL1WEW6UQIRzv14LIfxf5tMs1Tz80QNldD5ybWLUbwHvzaq5is/exec';
+var API = 'https://script.google.com/macros/s/AKfycbwXYoFj11gRgfE1YrcGcTdqnHsquWE-Vlmbh8YbZtJvq0kF3XizdHB02OoFDnGqyWN6/exec';
 
 var _cbIdx = 0;
 
