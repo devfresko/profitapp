@@ -2074,7 +2074,7 @@ function importPurchasePDF() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
   }
 
-  var entries = src.map(function(r) {
+  var allEntries = src.map(function(r) {
     return {
       date: r.date,
       qty: Number(r.qty) || 0,
@@ -2082,47 +2082,80 @@ function importPurchasePDF() {
     };
   }).filter(function(r) { return r.date && r.amount > 0; });
 
-  var totalAmt = entries.reduce(function(s, e) { return s + e.amount; }, 0);
+  // JSONP URL limit avoid — 8 entries per batch
+  var BATCH = 8;
+  var batches = [];
+  for (var i = 0; i < allEntries.length; i += BATCH) {
+    batches.push(allEntries.slice(i, i + BATCH));
+  }
 
-  _api('bulkSavePurchase', { entries: entries, rows: entries },
-    function(r) {
+  var totalSaved = 0, totalUpdated = 0, totalAdded = 0;
+  var totalAmt = allEntries.reduce(function(s, e) { return s + e.amount; }, 0);
+  var bi = 0;
+
+  function runNext() {
+    if (bi >= batches.length) {
+      // done
       if (typeof _busy !== 'undefined') _busy = false;
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
+      try { closeModal('m-pur'); } catch (e) {}
+      var modal = document.getElementById('m-pur');
+      if (modal) modal.classList.remove('show');
+      try { pdfReset(); } catch (e) {}
+      _pdfParsed = [];
+      window._pdfParsed = [];
 
-      if (r && r.success) {
-        // Modal band + form reset
-        try { closeModal('m-pur'); } catch (e) {}
-        var modal = document.getElementById('m-pur');
-        if (modal) modal.classList.remove('show');
-
-        try { pdfReset(); } catch (e) {}
-        _pdfParsed = [];
-        window._pdfParsed = [];
-
-        var msg = '✅ ' + (r.saved || entries.length) + ' entries';
-        if (r.updated) msg += ' (' + r.updated + ' updated';
-        if (r.added) msg += (r.updated ? ', ' : ' (') + r.added + ' new';
-        if (r.updated || r.added) msg += ')';
-        msg += ' save ho gayin!';
-        toast(msg, 'success');
-
-        _loadData(false);
-      } else {
-        toast('❌ ' + ((r && r.error) || 'Import failed'), 'error');
-      }
-    },
-    function(err) {
-      if (typeof _busy !== 'undefined') _busy = false;
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
-      }
-      toast('❌ ' + ((err && err.message) || 'Network error'), 'error');
+      var msg = '✅ ' + totalSaved + ' entries save';
+      if (totalUpdated) msg += ' (' + totalUpdated + ' updated';
+      if (totalAdded) msg += (totalUpdated ? ', ' : ' (') + totalAdded + ' new';
+      if (totalUpdated || totalAdded) msg += ')';
+      msg += '!';
+      toast(msg, 'success');
+      _loadData(false);
+      return;
     }
-  );
+
+    if (btn) {
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' +
+        (bi + 1) + '/' + batches.length + '…';
+    }
+
+    var chunk = batches[bi];
+    _api('bulkSavePurchase', { entries: chunk, rows: chunk },
+      function(r) {
+        if (r && r.success) {
+          totalSaved   += (r.saved || chunk.length);
+          totalUpdated += (r.updated || 0);
+          totalAdded   += (r.added || 0);
+          bi++;
+          runNext();
+        } else {
+          if (typeof _busy !== 'undefined') _busy = false;
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+          }
+          toast('❌ Batch ' + (bi + 1) + ': ' + ((r && r.error) || 'Import failed'), 'error');
+          if (totalSaved > 0) _loadData(false);
+        }
+      },
+      function(err) {
+        if (typeof _busy !== 'undefined') _busy = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+        }
+        toast('❌ Network error (batch ' + (bi + 1) + '). ' +
+              ((err && err.message) || 'GAS check karein'), 'error');
+        if (totalSaved > 0) _loadData(false);
+      }
+    );
+  }
+
+  runNext();
 }
 
 /* ═══════════════════════════════════════════════════════════
