@@ -53,7 +53,7 @@ function _api(action, data, ok, err) {
     // Auto sign-out if not authenticated
     if (r && r.success === false && r.error === 'NOT_AUTHENTICATED') {
       toast('Session expired. Please login again.', 'warning');
-      setTimeout(() => location.reload(), 1500);
+      setTimeout(() => location.reload(), 90000);
       return;
     }
     if (ok) ok(r);
