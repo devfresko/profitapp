@@ -1,8 +1,11 @@
 const crypto = require('crypto');
 const store = require('./_store');
+const { fromSnapshot } = require('./_snapServe');
 
 const GAS_URL = process.env.GAS_URL;
 const GAS_SECRET = process.env.GAS_SECRET || process.env.API_SECRET;
+
+const READ_ACTIONS = new Set(['getAllData', 'checkLastUpdate']);
 
 async function callGas(action, data, token) {
   const ctl = new AbortController();
@@ -29,7 +32,16 @@ async function callGas(action, data, token) {
 }
 
 async function handle(action, data, token) {
-  // Reads can come from snapshot later; for now direct GAS
+  // Pehle snapshot try karo (fast)
+  if (READ_ACTIONS.has(action)) {
+    try {
+      const snap = await store.loadSnapshot();
+      const fromSnap = fromSnapshot(snap, action, data);
+      if (fromSnap) return fromSnap;
+    } catch (e) {}
+  }
+
+  // Fallback to GAS
   return callGas(action, data, token);
 }
 
