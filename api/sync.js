@@ -1,8 +1,17 @@
+const { callGas, store } = require('./_lib');
+
 module.exports = async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store');
-  const secret = String(req.query.secret || '');
-  if (secret !== process.env.SYNC_SECRET) {
+  if (String(req.query.secret || '') !== process.env.SYNC_SECRET) {
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
-  res.status(200).json({ success: true, message: 'Sync endpoint ready' });
+  try {
+    const snap = await callGas('getSnapshot', {}, '');
+    if (snap && snap.success) {
+      await store.saveSnapshot(snap);
+      return res.status(200).json({ success: true, saved: true });
+    }
+    res.status(200).json({ success: false, error: 'getSnapshot failed' });
+  } catch (e) {
+    res.status(200).json({ success: false, error: e.message });
+  }
 };
