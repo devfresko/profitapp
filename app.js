@@ -37,7 +37,7 @@ let _lastChange = '0';
 ───────────────────────────────────────────────────────── */
 
 // ⚠️  GAS deployment URL yahan daalo (Deploy → New → Web App → Anyone)
-var API = 'https://script.google.com/macros/s/AKfycbwV7lUHjy7DLgvvZ31Gx9phCZgRqkbf984QzAG_fN1WvkFsPuBpPogg6ETUL6wouPXn/exec';
+var API = 'https://script.google.com/macros/s/AKfycbyULTKbu2gBwaIcSConsDT8SGwA6j5h-HKFsrjI8cT60DWnKeEUqi_i_y3W7NiSmFmE/exec';
 
 var _cbIdx = 0;
 
@@ -53,7 +53,7 @@ function _api(action, data, ok, err) {
     // Auto sign-out if not authenticated
     if (r && r.success === false && r.error === 'NOT_AUTHENTICATED') {
       toast('Session expired. Please login again.', 'warning');
-      setTimeout(() => location.reload(), 90000);
+      setTimeout(() => location.reload(), 1500);
       return;
     }
     if (ok) ok(r);
@@ -2132,8 +2132,8 @@ function importPurchasePDF() {
     toast('Koi entries nahi hain. PDF dobara upload karein.', 'warning');
     return;
   }
-  if (typeof _busy !== 'undefined' && _busy) return;
-  if (typeof _busy !== 'undefined') _busy = true;
+  if (_busy) return;
+  _busy = true;
 
   var btn = document.getElementById('pdf-import-btn');
   if (btn) {
@@ -2149,49 +2149,34 @@ function importPurchasePDF() {
     };
   }).filter(function(r) { return r.date && r.amount > 0; });
 
-  var BATCH = 5; // chhota rakho timeout avoid
-  var batches = [];
-  for (var i = 0; i < allEntries.length; i += BATCH) {
-    batches.push(allEntries.slice(i, i + BATCH));
-  }
-
-  var totalSaved = 0, totalUpdated = 0, bi = 0;
-
-  function runNext() {
-    if (bi >= batches.length) {
-      if (typeof _busy !== 'undefined') _busy = false;
+  // Ek hi call — inspiration from PurchaseUploader
+  _api('bulkSavePurchaseFast', { entries: allEntries, source: 'PDF' },
+    function(r) {
+      _busy = false;
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
-      try { closeModal('m-pur'); } catch (e) {}
-      try { pdfReset(); } catch (e) {}
-      _pdfParsed = [];
-      window._pdfParsed = [];
-      toast('✅ ' + (totalSaved + totalUpdated) + ' entries import ho gaye!', 'success');
-      _loadData(false);
-      return;
-    }
-
-    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> ' + (bi + 1) + '/' + batches.length;
-
-    _api('bulkSavePurchase', { entries: batches[bi], source: 'PDF' },
-      function(r) {
-        if (r && r.success) {
-          totalSaved += (r.saved || 0);
-          totalUpdated += (r.updated || 0);
-        }
-        bi++;
-        setTimeout(runNext, 400); // thoda gap
-      },
-      function() {
-        bi++;
-        setTimeout(runNext, 800); // retry gap
+      if (r && r.success) {
+        try { closeModal('m-pur'); } catch (e) {}
+        try { pdfReset(); } catch (e) {}
+        _pdfParsed = [];
+        window._pdfParsed = [];
+        toast('✅ ' + (r.total || allEntries.length) + ' entries import ho gaye!', 'success');
+        _loadData(false);
+      } else {
+        toast('❌ ' + ((r && r.error) || 'Import failed'), 'error');
       }
-    );
-  }
-
-  runNext();
+    },
+    function(err) {
+      _busy = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
+      }
+      toast('❌ Network error. Dobara try karein.', 'error');
+    }
+  );
 }
 
 
