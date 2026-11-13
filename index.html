@@ -15,552 +15,235 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
-    :root{--navy:#0f172a;--navy2:#1e293b;--blue:#2563eb;--blue-d:#1d4ed8;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#059669;--green-l:#ecfdf5;--orange:#d97706;--red:#dc2626;--red-l:#fef2f2;--amber:#f59e0b;--purple:#7c3aed;--shadow:0 1px 3px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.04);--radius:12px;--sidebar-w:240px}
-    *{box-sizing:border-box;margin:0;padding:0}
-    html{-webkit-text-size-adjust:100%;height:100%}
-    body{font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden;height:100%;margin:0}
-    button,input,select,textarea{font:inherit}
-    button{cursor:pointer}
-    .app{display:none;min-height:100vh;min-height:100dvh}
-    .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--navy);color:#fff;display:flex;flex-direction:column;z-index:30;transition:width .22s ease,transform .22s ease;overflow:hidden}
-    .main{margin-left:var(--sidebar-w);width:calc(100% - var(--sidebar-w));min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;min-width:0;transition:margin-left .22s ease,width .22s ease}
-    .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:25}
-    .sidebar-overlay.show{display:block}
-    .app.collapsed .sidebar{width:72px}
-    .app.collapsed .main{margin-left:72px;width:calc(100% - 72px)}
-    .brand{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0}
-    .brand .logo-row{display:flex;align-items:center;gap:10px}
-    .brand .logo-mark{background:#fff;color:var(--navy);font-weight:800;font-size:12px;padding:3px 7px;border-radius:4px}
-    .brand .logo-text{font-size:15px;font-weight:700;letter-spacing:-.3px}
-    .brand small{display:block;color:#64748b;font-size:10px;margin-top:5px}
-    .nav{padding:12px 10px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
-    .sb-nav-item{border:0;background:transparent;color:#94a3b8;text-align:left;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px;font-weight:500;font-size:13.5px;width:100%;transition:all .15s;cursor:pointer}
-    .sb-nav-item:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
-    .sb-nav-item.active{background:var(--blue);color:#fff;box-shadow:0 4px 12px rgba(37,99,235,.35)}
-    .sidebottom{padding:12px;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0}
-    .topbar{height:56px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:20}
-    .topbar h1{font-size:15.5px;font-weight:650;letter-spacing:-.2px;margin:0}
-    .content{padding:20px 24px 36px;width:100%;min-width:0}
-    .welcome{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap}
-    .welcome h2{font-size:17px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px}
-    .welcome p{color:var(--muted);font-size:13px}
-    .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
-    .metric{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px 14px;box-shadow:var(--shadow);min-height:108px}
-    .metric.blue{background:linear-gradient(135deg,#f8faff,#f0f5ff);border-color:#dbe7ff}
-    .metric.green{background:linear-gradient(135deg,#f0fdf6,#ecfdf5);border-color:#bbf7d0}
-    .metric.orange{background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a}
-    .metric.red{background:linear-gradient(135deg,#fef2f2,#fee2e2);border-color:#fecaca}
-    .metric-label{font-size:11.5px;font-weight:500;color:#64748b;margin-bottom:5px}
-    .metric-value{font-size:22px;font-weight:700;letter-spacing:-.5px}
-    .metric-sub{font-size:11px;color:#94a3b8;margin-top:5px}
-    .panel{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
-    .panel-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-    .panel-head h3{font-size:13.5px;font-weight:650;margin:0}
-    .tablewrap{overflow-x:auto}
-    table{border-collapse:collapse;width:100%;font-size:12.5px}
-    th{text-align:left;background:#f8fafc;color:#64748b;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
-    td{padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#334155}
-    tbody tr:hover{background:#fafbfc}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;font-weight:600;font-size:13px;border:1px solid transparent;transition:all .15s}
-    .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
-    .btn.primary:hover{background:var(--blue-d)}
-    .btn.ghost{background:#fff;border-color:var(--line);color:#334155}
-    .btn.sm{padding:5px 10px;font-size:11.5px}
-    .view{display:none}
-    .view.active{display:block}
-    .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
-    .search{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 14px;min-width:180px;outline:none}
-    .emptyrow{text-align:center!important;padding:32px 12px!important;color:#94a3b8!important}
-    .pill{display:inline-flex;align-items:center;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:500}
-    .pill.green{background:#ecfdf5;color:#047857}
-    .pill.orange{background:#fffbeb;color:#b45309}
-    .pill.red{background:#fef2f2;color:#b91c1c}
-    .login{min-height:100vh;display:grid;place-items:center;background:linear-gradient(160deg,#f1f5f9,#e2e8f0);padding:20px}
-    .loginbox{width:min(400px,100%);background:#fff;border-radius:16px;padding:32px 28px;box-shadow:0 20px 60px rgba(15,23,42,.08);border:1px solid #e2e8f0}
-    .loginbrand{background:var(--navy);color:#fff;border-radius:10px;padding:16px 18px;margin-bottom:24px}
-    .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
-    .field label{font-size:12px;font-weight:600;color:#334155}
-    .field input,.field select{width:100%;padding:11px 14px;border:1px solid #e2e8f0;border-radius:8px;outline:none}
-    .field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-    .btn-block{width:100%;padding:12px}
-    .loginerr{font-size:12px;color:var(--red);margin-top:12px;display:none}
-    @media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:768px){.sidebar{transform:translateX(-100%);width:min(280px,86vw)}.sidebar.open{transform:translateX(0)}.main{margin-left:0!important;width:100%!important}.cards{grid-template-columns:1fr 1fr}.content{padding:14px 12px 28px}}
-    @media(max-width:420px){.cards{grid-template-columns:1fr}}
-    .loader{position:fixed;inset:0;background:rgba(248,250,252,.85);display:none;align-items:center;justify-content:center;z-index:50}
-    .loader.show{display:flex}
-    .spinner{width:32px;height:32px;border:2.5px solid #e2e8f0;border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    /* Additional utility and component styles to match full KBN theme depth */
-    .page-actions{display:flex;gap:8px;flex-shrink:0}
-    .datebox{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 13px;color:#475569;font-size:12px;font-weight:500;white-space:nowrap}
-    .link{color:var(--blue);font-size:12px;font-weight:500;cursor:pointer;margin-left:auto}
-    .count{margin-left:auto;color:var(--muted);font-size:12px}
-    .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .formgrid .full{grid-column:1/-1}
-    .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
-    .modal-overlay.show{display:flex}
-    .modal-box{width:min(520px,100%);background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(15,23,42,.18);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
-    .modal-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center}
-    .modal-body{padding:16px;overflow:auto;flex:1}
-    .modal-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
-    /* Chart containers */
-    canvas{max-width:100%}
-    /* Empty states */
-    .empty{text-align:center;padding:40px 20px;color:#94a3b8}
-    .empty strong{display:block;color:#475569;margin-bottom:4px}
-    /* Sidebar user */
-    .sb-user{display:flex;align-items:center;gap:8px;padding:8px 0}
-    /* Mobile menu */
-    .mobilemenu{display:none;border:0;background:transparent;color:var(--ink);padding:6px}
-    @media(max-width:768px){.mobilemenu{display:grid}}
+    :root {
+      --navy: #0f172a;
+      --navy2: #1e293b;
+      --blue: #2563eb;
+      --blue-d: #1d4ed8;
+      --ink: #0f172a;
+      --muted: #64748b;
+      --line: #e2e8f0;
+      --bg: #f8fafc;
+      --green: #059669;
+      --green-l: #ecfdf5;
+      --orange: #d97706;
+      --red: #dc2626;
+      --red-l: #fef2f2;
+      --amber: #f59e0b;
+      --shadow: 0 1px 3px rgba(15,23,42,.06), 0 4px 12px rgba(15,23,42,.04);
+      --radius: 12px;
+      --sidebar-w: 240px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: Inter, system-ui, sans-serif; background: var(--bg); color: var(--ink); font-size: 13.5px; }
+    .login { min-height: 100vh; display: grid; place-items: center; background: linear-gradient(160deg,#f1f5f9,#e2e8f0); padding: 20px; }
+    .loginbox { width: min(400px,100%); background: #fff; border-radius: 16px; padding: 32px 28px; box-shadow: 0 20px 60px rgba(15,23,42,.08); border: 1px solid #e2e8f0; }
+    .loginbrand { background: var(--navy); color: #fff; border-radius: 10px; padding: 16px 18px; margin-bottom: 24px; }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .field label { font-size: 12px; font-weight: 600; color: #334155; }
+    .field input { width: 100%; padding: 11px 14px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .field input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.12); outline: none; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 13px; border: 1px solid transparent; cursor: pointer; }
+    .btn.primary { background: var(--blue); color: #fff; border-color: var(--blue); width: 100%; }
+    .btn.primary:hover { background: var(--blue-d); }
+    .loginerr { font-size: 12px; color: var(--red); margin-top: 12px; display: none; }
+    .app { display: none; min-height: 100vh; }
+    .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w); background: var(--navy); color: #fff; display: flex; flex-direction: column; z-index: 30; }
+    .main { margin-left: var(--sidebar-w); min-height: 100vh; display: flex; flex-direction: column; }
+    .topbar { height: 56px; background: #fff; border-bottom: 1px solid var(--line); display: flex; align-items: center; padding: 0 20px; }
+    .content { padding: 20px 24px; flex: 1; overflow: auto; }
+    .view { display: none; }
+    .view.active { display: block; }
+    .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 16px; }
+    .metric { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+    .metric-value { font-size: 22px; font-weight: 700; }
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f1f5f9; }
+    th { background: #f8fafc; color: #64748b; font-size: 11px; text-transform: uppercase; }
+    .sb-nav-item { padding: 11px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 12px; color: #94a3b8; }
+    .sb-nav-item.active { background: var(--blue); color: #fff; }
+    @media (max-width: 768px) { .sidebar { transform: translateX(-100%); } .sidebar.open { transform: translateX(0); } .main { margin-left: 0; } .cards { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
 <body>
 
+<!-- LOGIN -->
 <div class="login" id="login-wrapper">
   <div class="loginbox">
     <div class="loginbrand">
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="logo-mark" style="background:#fff;color:var(--navy);font-weight:800;padding:4px 8px;border-radius:4px">FR</div>
+        <div style="background:#fff;color:var(--navy);font-weight:800;padding:4px 8px;border-radius:4px">FR</div>
         <div>
           <div style="font-size:16px;font-weight:700">Fresko P&L</div>
-          <small style="display:block;color:#94a3b8;font-size:11px;margin-top:3px">Profit & Loss Management System</small>
+          <small style="color:#94a3b8;font-size:11px">Profit & Loss Management System</small>
         </div>
       </div>
     </div>
-    <h2 style="font-size:22px;font-weight:700;margin-bottom:6px">Sign in to your account</h2>
-    <p style="color:var(--muted);margin-bottom:22px">Access purchases, sales, expenses and full P&L reports.</p>
-    <form id="loginForm" onsubmit="return false">
-      <div class="field"><label>Email address</label><input type="email" id="f-email" placeholder="yourname@fresko.co.in" required autocomplete="username"></div>
-      <div class="field"><label>Password</label><input type="password" id="f-pass" placeholder="Enter your password" required autocomplete="current-password"></div>
-      <button type="button" class="btn primary btn-block" id="login-btn" onclick="doLogin()">Sign In</button>
-      <div class="loginerr" id="eb"></div>
-    </form>
-    <div style="font-size:11px;color:#94a3b8;margin-top:20px;text-align:center">© Fresko · P&L Management · FY 2025–26</div>
+    <div id="form-area">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:6px">Sign in to your account</h2>
+      <p style="color:var(--muted);margin-bottom:22px">Access purchases, sales, expenses and full P&L reports.</p>
+      <form onsubmit="return false">
+        <div class="field"><label>Email address</label><input type="email" id="f-email" placeholder="yourname@fresko.co.in"></div>
+        <div class="field"><label>Password</label><input type="password" id="f-pass" placeholder="Enter your password"></div>
+        <button class="btn primary" id="login-btn" onclick="doLogin()">Sign In</button>
+        <div class="loginerr" id="eb"><span id="et"></span></div>
+      </form>
+    </div>
+    <!-- Welcome Card (app.js expects these IDs) -->
+    <div id="wc" style="display:none">
+      <div style="text-align:center;padding:20px 0">
+        <div id="wav" style="width:56px;height:56px;border-radius:50%;background:var(--blue);color:#fff;display:inline-grid;place-items:center;font-weight:700;font-size:18px;margin-bottom:12px">US</div>
+        <div id="wn" style="font-size:18px;font-weight:700">User</div>
+        <div id="wd-dept" style="font-size:12px;color:var(--muted);margin-top:4px">DEPARTMENT</div>
+        <div id="we" style="font-size:13px;color:var(--muted);margin-top:8px">email@fresko.co.in</div>
+        <button class="btn primary" style="margin-top:20px;width:auto;padding:10px 24px" onclick="enterApp()">Enter Dashboard</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#94a3b8;margin-top:20px;text-align:center">© Fresko · P&L Management</div>
   </div>
 </div>
 
+<!-- APP -->
 <div class="app" id="app-wrapper">
-  <div class="sidebar-overlay" id="sidebarOverlay"></div>
   <aside class="sidebar" id="sb">
-    <div class="brand">
-      <div class="logo-row">
-        <div class="logo-mark">FR</div>
-        <div class="logo-text-wrap">
-          <span class="logo-text">Fresko P&L</span>
-          <small>FY 2025–26</small>
+    <div style="padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="background:#fff;color:var(--navy);font-weight:800;padding:3px 7px;border-radius:4px">FR</div>
+        <div>
+          <div style="font-size:15px;font-weight:700">Fresko P&L</div>
+          <small style="color:#64748b;font-size:10px">FY 2025–26</small>
         </div>
       </div>
     </div>
-    <nav class="nav" id="nav">
-      <div class="sb-nav-item active" onclick="goTo('dashboard')"><i class="fas fa-home"></i><span class="nav-label">Dashboard</span></div>
-      <div class="sb-nav-item" onclick="goTo('summary')"><i class="fas fa-chart-bar"></i><span class="nav-label">Annual Summary</span></div>
-      <div class="sb-nav-item" onclick="goTo('purchase')"><i class="fas fa-shopping-cart"></i><span class="nav-label">Purchase Entry</span></div>
-      <div class="sb-nav-item" onclick="goTo('sales')"><i class="fas fa-truck"></i><span class="nav-label">Sales Entry</span></div>
-      <div class="sb-nav-item" onclick="goTo('expenses')"><i class="fas fa-file-invoice-dollar"></i><span class="nav-label">Expenses Entry</span></div>
-      <div class="sb-nav-item" onclick="goTo('monthly')"><i class="fas fa-calendar-alt"></i><span class="nav-label">Monthly P&L</span></div>
-      <div class="sb-nav-item" onclick="goTo('analysis')"><i class="fas fa-chart-pie"></i><span class="nav-label">Party Analysis</span></div>
-      <div class="sb-nav-item" onclick="goTo('insights')"><i class="fas fa-lightbulb"></i><span class="nav-label">Insights</span></div>
+    <nav style="padding:12px 10px;flex:1">
+      <div class="sb-nav-item active" onclick="goTo('dashboard')"><i class="fas fa-home"></i> Dashboard</div>
+      <div class="sb-nav-item" onclick="goTo('summary')"><i class="fas fa-chart-bar"></i> Annual Summary</div>
+      <div class="sb-nav-item" onclick="goTo('purchase')"><i class="fas fa-shopping-cart"></i> Purchase Entry</div>
+      <div class="sb-nav-item" onclick="goTo('sales')"><i class="fas fa-truck"></i> Sales Entry</div>
+      <div class="sb-nav-item" onclick="goTo('expenses')"><i class="fas fa-file-invoice-dollar"></i> Expenses Entry</div>
+      <div class="sb-nav-item" onclick="goTo('monthly')"><i class="fas fa-calendar-alt"></i> Monthly P&L</div>
+      <div class="sb-nav-item" onclick="goTo('analysis')"><i class="fas fa-chart-pie"></i> Party Analysis</div>
+      <div class="sb-nav-item" onclick="goTo('insights')"><i class="fas fa-lightbulb"></i> Insights</div>
     </nav>
-    <div class="sidebottom">
-      <div class="sb-user">
-        <div id="sb-avatar" style="width:32px;height:32px;border-radius:50%;background:#334155;display:grid;place-items:center;font-weight:700;font-size:11px;color:#fff">U</div>
+    <div style="padding:12px;border-top:1px solid rgba(255,255,255,.06)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div id="sb-avatar" style="width:32px;height:32px;border-radius:50%;background:#334155;display:grid;place-items:center;font-weight:700;font-size:11px">U</div>
         <div>
           <div id="sb-uname" style="font-size:12px;font-weight:600">User</div>
           <small id="sb-role" style="color:#64748b;font-size:10px">Role</small>
         </div>
       </div>
-      <button class="btn ghost sm" style="width:100%;margin-top:8px;background:rgba(255,255,255,.06);border:0;color:#94a3b8" onclick="logout()">Logout</button>
     </div>
   </aside>
   <div class="main">
-    <header class="topbar">
-      <button class="mobilemenu" id="mobileMenu"><i class="fas fa-bars"></i></button>
-      <h1 id="pageTitle">Dashboard</h1>
+    <header class="topbar" id="topbar">
+      <h1 id="tb-title">Dashboard</h1>
+      <span id="tb-sub" style="font-size:12px;color:var(--muted);margin-left:8px"></span>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
         <span id="tb-date" style="font-size:12px;color:var(--muted)"></span>
-        <button class="btn ghost sm" onclick="_loadData(true)"><i class="fas fa-sync"></i> Refresh</button>
+        <span id="last-sync-lbl" style="font-size:11px;color:var(--muted)"></span>
+        <button class="btn" style="background:none;border:1px solid var(--line);padding:6px 10px" onclick="_loadData(true)"><i class="fas fa-sync" id="refresh-icon"></i></button>
       </div>
     </header>
     <div class="content" id="content">
-      <div id="loader" class="loader"><div class="spinner"></div></div>
+      <div id="loader" style="display:flex;align-items:center;justify-content:center;height:200px"><div style="width:32px;height:32px;border:2.5px solid #e2e8f0;border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite"></div></div>
 
-      <!-- ==================== DASHBOARD ==================== -->
-      <section class="view active" id="v-dashboard">
-        <div class="welcome">
-          <div>
-            <h2 id="greeting">Good morning</h2>
-            <p>FY 2025–26 · Real-time Profit & Loss Overview</p>
-          </div>
-          <div class="datebox" id="dateRange">—</div>
-        </div>
-        <div class="cards">
-          <div class="metric blue">
-            <div class="metric-label">TOTAL PURCHASE</div>
-            <div class="metric-value" id="dash-purchase">₹0</div>
-            <div class="metric-sub">Year to date</div>
-          </div>
-          <div class="metric green">
-            <div class="metric-label">TOTAL SALE</div>
-            <div class="metric-value" id="dash-sale">₹0</div>
-            <div class="metric-sub">Year to date</div>
-          </div>
-          <div class="metric orange">
-            <div class="metric-label">TOTAL EXPENSES</div>
-            <div class="metric-value" id="dash-exp">₹0</div>
-            <div class="metric-sub">Year to date</div>
-          </div>
-          <div class="metric red">
-            <div class="metric-label">NET P/L</div>
-            <div class="metric-value" id="dash-net">₹0</div>
-            <div class="metric-sub" id="dash-margin">0% margin</div>
-          </div>
-        </div>
-        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric">
-            <div class="metric-label">Gross Margin</div>
-            <div class="metric-value" id="dash-gross">₹0 (P)</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Net Margin %</div>
-            <div class="metric-value" id="dash-netm">0%</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Expense Ratio</div>
-            <div class="metric-value" id="dash-expr">0%</div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>Purchase vs Sale Trend</h3></div>
-          <canvas id="dash-chart" height="140"></canvas>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Recent Purchases</h3>
-            <span class="link" onclick="goTo('purchase')">View All →</span>
-          </div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>Date</th><th>Qty</th><th>Amount</th><th>Added By</th></tr></thead>
-              <tbody id="dash-recent-pur"><tr><td colspan="4" class="emptyrow">Koi purchase entry nahi</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Recent Sales</h3>
-            <span class="link" onclick="goTo('sales')">View All →</span>
-          </div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>Date</th><th>Party</th><th>Qty</th><th>Amount</th></tr></thead>
-              <tbody id="dash-recent-sale"><tr><td colspan="4" class="emptyrow">Koi sale entry nahi</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ==================== ANNUAL SUMMARY ==================== -->
-      <section class="view" id="v-summary">
-        <div class="welcome">
-          <div>
-            <h2>Annual Summary</h2>
-            <p>FY 2025–26 · Month-wise complete P&L statement</p>
-          </div>
-        </div>
-        <div class="cards">
-          <div class="metric blue"><div class="metric-label">YTD PURCHASE</div><div class="metric-value" id="sum-purchase">₹0</div></div>
-          <div class="metric green"><div class="metric-label">YTD SALE</div><div class="metric-value" id="sum-sale">₹0</div></div>
-          <div class="metric orange"><div class="metric-label">YTD EXPENSES</div><div class="metric-value" id="sum-exp">₹0</div></div>
-          <div class="metric red"><div class="metric-label">NET PROFIT</div><div class="metric-value" id="sum-net">₹0</div></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>Month-wise Breakdown</h3><span class="count">★ Current month</span></div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>MONTH</th><th>PURCHASE (₹)</th><th>SALE (₹)</th><th>EXPENSES (₹)</th><th>GROSS P/L</th><th>NET P/L</th><th>MARGIN %</th></tr></thead>
-              <tbody id="sum-table"><tr><td colspan="7" class="emptyrow">No monthly data yet</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ==================== PURCHASE ENTRY ==================== -->
-      <section class="view" id="v-purchase">
-        <div class="welcome">
-          <div>
-            <h2>Purchase Entry</h2>
-            <p>Daily purchase record karein</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn ghost sm">Export CSV</button>
-            <button class="btn primary sm" onclick="openPurchaseModal()">New Entry</button>
-          </div>
-        </div>
-        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric"><div class="metric-label">TOTAL ENTRIES</div><div class="metric-value" id="pur-count">0</div></div>
-          <div class="metric"><div class="metric-label">TOTAL PURCHASE</div><div class="metric-value" id="pur-total">₹0</div></div>
-          <div class="metric"><div class="metric-label">AVG. PER ENTRY</div><div class="metric-value" id="pur-avg">—</div></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Purchase History</h3>
-            <span class="count" id="pur-records">0 records</span>
-          </div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>#</th><th>DATE</th><th>QTY</th><th>AMOUNT</th><th>ADDED BY</th><th>TIMESTAMP</th></tr></thead>
-              <tbody id="pur-table"><tr><td colspan="6" class="emptyrow">Koi data nahi hai<br><small>No entries</small></td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ==================== SALES ENTRY ==================== -->
-      <section class="view" id="v-sales">
-        <div class="welcome">
-          <div>
-            <h2>Sales Entry</h2>
-            <p>Party-wise daily sales record karein</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn ghost sm">Export CSV</button>
-            <button class="btn primary sm" onclick="openSalesModal()">New Entry</button>
-          </div>
-        </div>
-        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric"><div class="metric-label">LOCAL SALE</div><div class="metric-value" id="sale-local">₹0</div></div>
-          <div class="metric"><div class="metric-label">SUPPLY SALE</div><div class="metric-value" id="sale-supply">₹0</div></div>
-          <div class="metric"><div class="metric-label">TOTAL SALE</div><div class="metric-value" id="sale-total">₹0</div></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Sales History</h3>
-            <select id="sale-filter" class="search" style="max-width:180px;margin-left:auto">
-              <option>All Parties</option>
-              <option>LOCAL SALE</option>
-              <option>SUPPLY SALE</option>
-            </select>
-            <span class="count" id="sale-records">0 records</span>
-          </div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>#</th><th>DATE</th><th>PARTY</th><th>QTY</th><th>AMOUNT</th><th>ADDED BY</th></tr></thead>
-              <tbody id="sale-table"><tr><td colspan="6" class="emptyrow">Koi data nahi hai<br><small>No entries</small></td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ==================== EXPENSES ENTRY ==================== -->
-      <section class="view" id="v-expenses">
-        <div class="welcome">
-          <div>
-            <h2>Expenses Entry</h2>
-            <p>Monthly operational expenses record karein</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn ghost sm">Export CSV</button>
-            <button class="btn primary sm" onclick="openExpenseModal()">New Entry</button>
-          </div>
-        </div>
-        <div class="cards" style="grid-template-columns:repeat(2,1fr)">
-          <div class="metric"><div class="metric-label">TOTAL EXPENSES (YTD)</div><div class="metric-value" id="exp-total">₹0</div></div>
-          <div class="metric"><div class="metric-label">EXPENSE RATIO (VS SALE)</div><div class="metric-value" id="exp-ratio">0%</div></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Expenses History</h3>
-            <span class="count" id="exp-records">0 entries</span>
-          </div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>#</th><th>MONTH</th><th>AMOUNT</th><th>ADDED BY</th><th>TIMESTAMP</th></tr></thead>
-              <tbody id="exp-table"><tr><td colspan="5" class="emptyrow">Koi data nahi hai</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <!-- ==================== MONTHLY P&L ==================== -->
-      <section class="view" id="v-monthly">
-        <div class="welcome">
-          <div>
-            <h2>Monthly P&L</h2>
-            <p>Month-wise detailed profit & loss statement</p>
-          </div>
-          <div class="page-actions">
-            <button class="btn ghost sm">Export CSV</button>
-            <button class="btn ghost sm">Print</button>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head">
-            <h3>Month-wise P&L Statement</h3>
-            <span class="count" id="mon-count">0 months</span>
-          </div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>MONTH</th><th>PURCHASE</th><th>SALE</th><th>EXPENSES</th><th>GROSS P/L</th><th>NET P/L</th><th>MARGIN %</th></tr></thead>
-              <tbody id="mon-table"><tr><td colspan="7" class="emptyrow">No data</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>Monthly Purchase vs Sale vs Expenses</h3></div>
-          <canvas id="mon-chart" height="120"></canvas>
-        </div>
-      </section>
-
-      <!-- ==================== PARTY ANALYSIS ==================== -->
-      <section class="view" id="v-analysis">
-        <div class="welcome">
-          <div>
-            <h2>Party Analysis</h2>
-            <p>Party-wise sales breakdown & insights</p>
-          </div>
-        </div>
-        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric"><div class="metric-label">Total Sale</div><div class="metric-value" id="party-total">₹0</div></div>
-          <div class="metric"><div class="metric-label">Party Types</div><div class="metric-value" id="party-types">0 types</div></div>
-          <div class="metric"><div class="metric-label">Total Transactions</div><div class="metric-value" id="party-tx">0 entries</div></div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>Party-wise Details</h3></div>
-          <div class="tablewrap">
-            <table>
-              <thead><tr><th>PARTY</th><th>TOTAL (₹)</th><th>TRANSACTIONS</th><th>AVG. (₹)</th><th>SHARE %</th></tr></thead>
-              <tbody id="party-table"><tr><td colspan="5" class="emptyrow">Party data nahi hai</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>Sales Split</h3></div>
-          <canvas id="party-chart" height="90"></canvas>
-        </div>
-      </section>
-
-      <!-- ==================== INSIGHTS ==================== -->
-      <section class="view" id="v-insights">
-        <div class="welcome">
-          <div>
-            <h2>Business Insights</h2>
-            <p>FY 2025–26 ke key metrics & performance analysis</p>
-          </div>
-        </div>
-        <div class="panel">
-          <div id="insights-content">
-            <div class="empty">
-              <strong>Yeh insights aapke actual data ke basis par automatically generate hote hain.</strong>
-              <p style="margin-top:8px">Data add karne ke baad yahan metrics dikhenge.</p>
-            </div>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="panel-head"><h3>Purchase vs Sale vs Net P/L Trend</h3></div>
-          <canvas id="ins-chart" height="120"></canvas>
-        </div>
-      </section>
+      <section class="view active" id="v-dashboard"></section>
+      <section class="view" id="v-summary"></section>
+      <section class="view" id="v-purchase"></section>
+      <section class="view" id="v-sales"></section>
+      <section class="view" id="v-expenses"></section>
+      <section class="view" id="v-monthly"></section>
+      <section class="view" id="v-analysis"></section>
+      <section class="view" id="v-insights"></section>
     </div>
   </div>
 </div>
 
+<!-- Placeholder modals (app.js will populate / use) -->
+<div id="m-pur" class="modal-overlay" style="display:none"></div>
+<div id="m-sale" class="modal-overlay" style="display:none"></div>
+<div id="m-exp" class="modal-overlay" style="display:none"></div>
+
+<!-- PDF related placeholders so getElementById doesn't return null -->
+<div id="pdf-dropzone" style="display:none"></div>
+<div id="pdf-file-input" style="display:none"></div>
+<div id="pdf-file-name" style="display:none"></div>
+<div id="pdf-found-count" style="display:none"></div>
+<div id="pdf-import-btn" style="display:none"></div>
+<div id="pdf-loading" style="display:none"></div>
+<div id="pdf-loading-page" style="display:none"></div>
+<div id="pdf-loading-text" style="display:none"></div>
+<div id="pdf-preview-table" style="display:none"></div>
+<div id="pdf-step-1" style="display:none"></div>
+<div id="pdf-step-2" style="display:none"></div>
+<div id="pdf-total-amt" style="display:none"></div>
+<div id="pdf-total-qty" style="display:none"></div>
+<div id="local-pdf-dropzone" style="display:none"></div>
+<div id="local-pdf-file-input" style="display:none"></div>
+<div id="local-pdf-file-name" style="display:none"></div>
+<div id="local-pdf-found-count" style="display:none"></div>
+<div id="local-pdf-import-btn" style="display:none"></div>
+<div id="local-pdf-loading" style="display:none"></div>
+<div id="local-pdf-loading-page" style="display:none"></div>
+<div id="local-pdf-preview-table" style="display:none"></div>
+<div id="local-pdf-step-1" style="display:none"></div>
+<div id="local-pdf-step-2" style="display:none"></div>
+<div id="local-pdf-total-amt" style="display:none"></div>
+<div id="local-pdf-total-qty" style="display:none"></div>
+<div id="supply-pdf-dropzone" style="display:none"></div>
+<div id="supply-pdf-file-input" style="display:none"></div>
+<div id="supply-pdf-file-name" style="display:none"></div>
+<div id="supply-pdf-found-count" style="display:none"></div>
+<div id="supply-pdf-import-btn" style="display:none"></div>
+<div id="supply-pdf-loading" style="display:none"></div>
+<div id="supply-pdf-loading-page" style="display:none"></div>
+<div id="supply-pdf-preview-table" style="display:none"></div>
+<div id="supply-pdf-step-1" style="display:none"></div>
+<div id="supply-pdf-step-2" style="display:none"></div>
+<div id="supply-pdf-total-amt" style="display:none"></div>
+<div id="supply-pdf-total-qty" style="display:none"></div>
+<div id="exp-pdf-dropzone" style="display:none"></div>
+<div id="exp-pdf-file-input" style="display:none"></div>
+<div id="exp-pdf-file-name" style="display:none"></div>
+<div id="exp-pdf-found-count" style="display:none"></div>
+<div id="exp-pdf-import-btn" style="display:none"></div>
+<div id="exp-pdf-loading" style="display:none"></div>
+<div id="exp-pdf-loading-page" style="display:none"></div>
+<div id="exp-pdf-loading-text" style="display:none"></div>
+<div id="exp-pdf-preview-table" style="display:none"></div>
+<div id="exp-pdf-step-1" style="display:none"></div>
+<div id="exp-pdf-step-2" style="display:none"></div>
+<div id="exp-pdf-total-amt" style="display:none"></div>
+<div id="pur-date" style="display:none"></div>
+<div id="pur-qty" style="display:none"></div>
+<div id="pur-amt" style="display:none"></div>
+<div id="sal-date" style="display:none"></div>
+<div id="sal-party" style="display:none"></div>
+<div id="sal-qty" style="display:none"></div>
+<div id="sal-amt" style="display:none"></div>
+<div id="exp-month" style="display:none"></div>
+<div id="exp-amt" style="display:none"></div>
+<div id="footer-year" style="display:none"></div>
+<div id="dark-ico" style="display:none"></div>
+<div id="sb-backdrop" style="display:none"></div>
+<div id="sb-chev" style="display:none"></div>
+<div id="tb-add-btn" style="display:none"></div>
+<div id="tb-add-lbl" style="display:none"></div>
+<div id="ch-pur-trend" style="display:none"></div>
+<div id="ch-sal-split" style="display:none"></div>
+<div id="__tip" style="display:none"></div>
+
 <script src="./app.js"></script>
 <script>
-function goTo(view) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.sb-nav-item').forEach(n => n.classList.remove('active'));
-  const target = document.getElementById('v-' + view);
-  if (target) target.classList.add('active');
-  const navItem = document.querySelector('[onclick*="goTo(\'' + view + '\')"]');
-  if (navItem) navItem.classList.add('active');
-  const titles = {
-    dashboard: 'Dashboard',
-    summary: 'Annual Summary',
-    purchase: 'Purchase Entry',
-    sales: 'Sales Entry',
-    expenses: 'Expenses Entry',
-    monthly: 'Monthly P&L',
-    analysis: 'Party Analysis',
-    insights: 'Insights'
-  };
-  const pt = document.getElementById('pageTitle');
-  if (pt) pt.textContent = titles[view] || view;
+function goTo(v) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.sb-nav-item').forEach(el => el.classList.remove('active'));
+  const t = document.getElementById('v-' + v);
+  if (t) t.classList.add('active');
+  event.target.closest('.sb-nav-item')?.classList.add('active');
 }
-function openPurchaseModal() { if (typeof openPurModal === 'function') openPurModal(); else Swal.fire('Purchase', 'Use app.js modal'); }
-function openSalesModal() { if (typeof openSaleModal === 'function') openSaleModal(); else Swal.fire('Sales', 'Use app.js modal'); }
-function openExpenseModal() { if (typeof openExpModal === 'function') openExpModal(); else Swal.fire('Expense', 'Use app.js modal'); }
-function logout() { if (typeof doLogout === 'function') doLogout(); else location.reload(); }
-// Mobile sidebar
-document.getElementById('mobileMenu')?.addEventListener('click', () => {
-  document.getElementById('sb').classList.toggle('open');
-  document.getElementById('sidebarOverlay').classList.toggle('show');
-});
-document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
-  document.getElementById('sb').classList.remove('open');
-  document.getElementById('sidebarOverlay').classList.remove('show');
-});
 </script>
 </body>
 </html>
-
-<style>
-
-/* ===== FULL THEME EXPANSION (KBN-matched depth) ===== */
-.sidebar-toggle{width:100%;border:0;background:rgba(255,255,255,.06);color:#94a3b8;border-radius:8px;padding:8px;margin-top:8px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.sidebar-toggle:hover{background:rgba(255,255,255,.1);color:#e2e8f0}
-.app.collapsed .sidebar .logo-text-wrap,.app.collapsed .sidebar .brand small,.app.collapsed .sidebar .nav-label{display:none!important}
-.app.collapsed .sb-nav-item{justify-content:center!important;padding:12px 0!important}
-.metric-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
-.metric-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex-shrink:0}
-.metric.blue .metric-icon{background:#dbeafe;color:#2563eb}
-.metric.green .metric-icon{background:#d1fae5;color:#059669}
-.metric.orange .metric-icon{background:#fef3c7;color:#d97706}
-.metric.red .metric-icon{background:#fee2e2;color:#dc2626}
-.panels{display:grid;grid-template-columns:1.3fr .9fr;gap:12px;margin-bottom:12px}
-.lower{display:grid;grid-template-columns:1.3fr .9fr;gap:12px}
-.statusbody{display:flex;align-items:center;gap:24px;min-height:170px}
-.donut{width:140px;height:140px;border-radius:50%;background:conic-gradient(#e2e8f0 0 100%);display:grid;place-items:center;position:relative}
-.donut::before{content:'';position:absolute;inset:24px;border-radius:50%;background:#fff}
-.donut strong{position:relative;z-index:1;font-size:17px;font-weight:700}
-.statuslegend{display:grid;gap:10px;flex:1}
-.statusrow{display:flex;align-items:center;gap:8px;font-size:12px;color:#475569}
-.statusrow i{width:9px;height:9px;border-radius:50%}
-.quickstats .qs-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
-.toast{position:fixed;right:16px;bottom:16px;z-index:40;background:var(--navy);color:#fff;border-radius:10px;padding:12px 16px;font-size:13px;display:none}
-.toast.show{display:block}
-/* Modal full structure styles */
-.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
-.modal-overlay.show{display:flex}
-.modal-box{width:min(520px,100%);background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(15,23,42,.18);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
-.modal-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center}
-.modal-head h3{margin:0;font-size:15px;font-weight:650}
-.modal-body{padding:16px;overflow:auto;flex:1}
-.modal-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
-/* Table action column */
-td.actions{white-space:nowrap;min-width:140px}
-td.actions .btn{margin-right:4px}
-/* Additional empty & utility */
-.empty-icon{width:40px;height:40px;margin:0 auto 10px;border-radius:50%;background:#f1f5f9;display:grid;place-items:center}
-/* Form enhancements */
-.field textarea{min-height:80px;resize:vertical}
-.type-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.type-pill{border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:#475569;cursor:pointer}
-.type-pill.active{background:var(--blue);border-color:var(--blue);color:#fff}
-/* More responsive rules */
-@media(max-width:900px){:root{--sidebar-w:220px}}
-@media(max-width:768px){
-  .sidebar{transform:translateX(-100%);width:min(280px,86vw)}
-  .sidebar.open{transform:translateX(0);box-shadow:8px 0 30px rgba(15,23,42,.28)}
-  .app.collapsed .sidebar{width:min(280px,86vw)}
-  .topbar{padding:0 12px;height:52px}
-  .profile .meta{display:none}
-  .content{padding:14px 12px 28px}
-  .welcome{flex-direction:column}
-  .cards{grid-template-columns:1fr 1fr;gap:10px}
-  .panels,.lower{grid-template-columns:1fr}
-}
-@media(max-width:420px){.cards{grid-template-columns:1fr}}
-
-</style>
