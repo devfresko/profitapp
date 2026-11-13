@@ -1,1506 +1,566 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <base target="_top">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
   <title>Fresko — P&L Tracker</title>
-
-  <!-- PWA -->
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/x-icon" href="./favicon.ico">
-  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png">
   <link rel="apple-touch-icon" href="./icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Fresko P&L">
-  <meta name="theme-color" content="#EA4335">
-
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta name="theme-color" content="#0f172a">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --red:       #EA4335;
-      --red-d:     #C5221F;
-      --red-l:     #FCE8E6;
-      --green:     #34A853;
-      --green-d:   #188038;
-      --green-l:   #E6F4EA;
-      --amber:     #FBBC05;
-      --amber-d:   #F29900;
-      --amber-l:   #FEF7E0;
-      --blue:      #4285F4;
-      --blue-d:    #1967D2;
-      --blue-l:    #E8F0FE;
-      --teal:      #0E7C86;
-      --teal-d:    #075E66;
-      --teal-l:    #E6F5F5;
-      --dark:      #0F172A;
-      --dark2:     #1E293B;
-      --slate:     #334155;
-      --bg:        #F8FAFC;
-      --white:     #FFFFFF;
-      --border:    #E2E8F0;
-      --text:      #1E293B;
-      --muted:     #64748B;
-      --sub:       #94A3B8;
-      --sidebar-w: 260px;
-      --topbar-h:  64px;
-      --radius:    14px;
-      --shadow:    0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
-      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);
-    }
-
-    html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
-
-    /* ── SCROLLBAR ── */
-    .scroll::-webkit-scrollbar { width: 4px; height: 4px; }
-    .scroll::-webkit-scrollbar-track { background: transparent; }
-    .scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
-
-    /* ── SHELL ── */
-    #shell { display: flex; width: 100vw; height: 100vh; overflow: hidden; }
-    #main  { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; overflow: hidden; }
-
-    /* ── SIDEBAR ── */
-    #sb {
-      width: var(--sidebar-w);
-      background: #0F172A;
-      color: #94A3B8;
-      display: flex; flex-direction: column;
-      height: 100vh; flex-shrink: 0;
-      transition: all .3s cubic-bezier(.4,0,.2,1);
-      position: relative; z-index: 50;
-      border-right: 1px solid rgba(255,255,255,.05);
-      box-shadow: 10px 0 30px rgba(0,0,0,.2);
-      overflow: hidden;
-    }
-    #sb.collapsed { width: 64px !important; }
-    #sb.collapsed .sb-lbl,
-    #sb.collapsed .sb-logo-text,
-    #sb.collapsed .sb-user-meta,
-    #sb.collapsed .sb-logout-lbl,
-    #sb.collapsed .sb-section-label { display: none !important; }
-
-    .sb-header {
-      height: 56px; display: flex; align-items: center;
-      padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,.05);
-      background: rgba(0,0,0,.3); flex-shrink: 0; gap: 10px;
-    }
-    .sb-logo-box {
-      background: #F1F5F9; border-radius: 8px; padding: 6px 10px;
-      height: 38px; display: flex; align-items: center;
-      justify-content: flex-start; flex-shrink: 0; transition: all .28s;
-    }
-    .sb-logo-text { font-size: 11px; font-weight: 500; color: #64748B; white-space: nowrap; flex: 1; min-width: 0; line-height: 1.3; }
-    .sb-logo-text strong { color: #CBD5E1; font-weight: 700; display: block; font-size: 12px; }
-    .sb-collapse-btn {
-      margin-left: auto; width: 26px; height: 26px;
-      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.07);
-      border-radius: 7px; cursor: pointer; color: #475569;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; transition: all .15s;
-    }
-    .sb-collapse-btn:hover { color: #fff; background: rgba(234,67,53,.2); border-color: rgba(234,67,53,.35); }
-
-    #sb.collapsed .sb-header { padding: 0; justify-content: center; gap: 0; }
-    #sb.collapsed .sb-logo-box { width: 44px; height: 44px; padding: 0; border-radius: 10px; background: none; box-shadow: none; justify-content: center; align-items: center; }
-    #sb.collapsed #sb-logo-full { display: none !important; }
-    #sb.collapsed #sb-logo-mini { display: flex !important; }
-    #sb:not(.collapsed) #sb-logo-full { display: flex !important; }
-    #sb:not(.collapsed) #sb-logo-mini { display: none !important; }
-    #sb.collapsed .sb-collapse-btn { display: none; }
-
-    .sb-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0 4px; scrollbar-width: none; }
-    .sb-nav::-webkit-scrollbar { display: none; }
-
-    .sb-section-label {
-      font-size: 9px; font-weight: 800; letter-spacing: .1em;
-      text-transform: uppercase; color: #2D3F55; padding: 14px 14px 4px; white-space: nowrap;
-    }
-    .sb-nav-divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,.05), transparent);
-      margin: 4px 10px;
-    }
-    .sb-nav-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 14px; margin: 2px 12px;
-      border-radius: 10px; cursor: pointer;
-      font-size: 13px; font-weight: 500; color: #94A3B8;
-      white-space: nowrap; position: relative; transition: all .2s ease;
-    }
-    .sb-nav-item i { font-size: 16px; width: 20px; text-align: center; transition: all .2s ease; }
-    .sb-nav-item:hover { background: rgba(255,255,255,.05); color: #F8FAFC; transform: translateX(4px); }
-    .sb-nav-item.active { background: linear-gradient(90deg,rgba(234,67,53,.15) 0%,transparent 100%); color: #EE675C !important; font-weight: 600; }
-    .sb-nav-item.active i { color: #EF4444 !important; transform: scale(1.1); }
-    .sb-badge {
-      margin-left: auto; flex-shrink: 0;
-      background: var(--red); color: #fff;
-      font-size: 9px; font-weight: 800; padding: 1px 6px;
-      border-radius: 10px; min-width: 18px; text-align: center;
-    }
-    #sb.collapsed .sb-nav-item { justify-content: center; padding: 10px 0; margin: 1px 8px; width: 48px; }
-    #sb.collapsed .sb-nav-item i { font-size: 15px; width: auto; margin: 0; }
-    #sb.collapsed .sb-badge {
-      position: absolute; top: 4px; right: 4px;
-      min-width: 15px; height: 15px; padding: 0 3px; font-size: 8px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 8px; border: 2px solid #111827;
-    }
-    #sb.collapsed .sb-nav-item:hover::before {
-      content: attr(data-tip);
-      position: absolute; left: 62px; top: 50%; transform: translateY(-50%);
-      background: #1A2535; color: #E2E8F0;
-      font-size: 11px; font-weight: 600; padding: 6px 12px;
-      border-radius: 7px; white-space: nowrap; z-index: 9999;
-      box-shadow: 0 6px 20px rgba(0,0,0,.45);
-      pointer-events: none; border: 1px solid rgba(255,255,255,.08);
-    }
-
-    .sb-bottom { padding: 10px 8px; border-top: 1px solid rgba(255,255,255,.05); flex-shrink: 0; background: rgba(0,0,0,.18); }
-    .sb-user-card {
-      display: flex; align-items: center; gap: 9px;
-      padding: 8px 10px; border-radius: 10px;
-      background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06);
-      margin-bottom: 8px; transition: background .15s;
-    }
-    .sb-user-card:hover { background: rgba(255,255,255,.06); }
-    .sb-user-avatar {
-      width: 32px; height: 32px; border-radius: 50%;
-      background: linear-gradient(135deg,#C5221F,var(--red));
-      color: #fff; font-size: 11px; font-weight: 800;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; box-shadow: 0 2px 8px rgba(234,67,53,.4);
-    }
-    .sb-user-meta { min-width: 0; flex: 1; }
-    .sb-user-name { font-size: 12px; font-weight: 700; color: #E2E8F0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-    .sb-user-dept { font-size: 10px; color: #2D3F55; margin-top: 2px; }
-    .sb-role-badge { font-size: 8px; font-weight: 800; padding: 1px 5px; border-radius: 4px; letter-spacing: .04em; text-transform: uppercase; }
-    .sb-logout-btn {
-      width: 100%; display: flex; align-items: center; gap: 8px;
-      padding: 8px 12px; border-radius: 8px;
-      border: 1px solid rgba(255,255,255,.06); background: none;
-      cursor: pointer; color: #2D3F55; font-size: 11px; font-weight: 600;
-      transition: all .15s; font-family: inherit;
-    }
-    .sb-logout-btn:hover { color: #EE675C; background: rgba(239,68,68,.09); border-color: rgba(239,68,68,.2); }
-    .sb-logout-btn i { font-size: 12px; flex-shrink: 0; }
-
-    #sb.collapsed .sb-bottom { padding: 8px 4px; }
-    #sb.collapsed .sb-user-card { width: 48px; justify-content: center; padding: 8px 0; margin: 0 auto 8px; background: none; border: none; }
-    #sb.collapsed .sb-user-avatar { margin: 0 auto; }
-    #sb.collapsed .sb-logout-btn { width: 48px; justify-content: center; padding: 8px 0; margin: 0 auto; display: flex; border-radius: 9px; }
-
-    /* ── TOPBAR ── */
-    #topbar {
-      height: var(--topbar-h);
-      background: rgba(255,255,255,.85);
-      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      display: flex; align-items: center;
-      padding: 0 24px; gap: 12px; flex-shrink: 0; z-index: 40;
-    }
-    .tb-toggle { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 6px; transition: all .15s; }
-    .tb-toggle:hover { color: var(--text); background: var(--bg); }
-    .tb-sep { width: 1px; height: 20px; background: var(--border); }
-    .tb-breadcrumb { font-size: 12px; color: var(--muted); font-weight: 500; }
-    .tb-breadcrumb strong { color: var(--text); }
-    .tb-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-    .tb-btn {
-      display: flex; align-items: center; gap: 5px;
-      padding: 5px 10px; border-radius: 7px; border: 1px solid transparent;
-      font-size: 11px; font-weight: 600; cursor: pointer;
-      transition: all .15s; background: none; color: var(--muted);
-    }
-    .tb-btn:hover { background: var(--bg); border-color: var(--border); color: var(--text); }
-    .tb-btn.primary { background: var(--red); color: #fff; border-color: var(--red); }
-    .tb-btn.primary:hover { background: var(--red-d); }
-
-    /* ── CONTENT ── */
-    #content { flex: 1; overflow-y: auto; padding: 24px; background: var(--bg); scroll-behavior: smooth; }
-    #content { scrollbar-width: thin; scrollbar-color: #CBD5E1 transparent; }
-
-    /* ── LOADER ── */
-    #loader {
-      position: fixed; inset: 0; background: #fff; z-index: 100;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    }
-    .spin-ring { width: 40px; height: 40px; border: 3px solid #F1F5F9; border-top: 3px solid var(--red); border-radius: 50%; animation: spin .8s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loader-text { font-size: 13px; color: var(--muted); font-weight: 500; }
-
-    /* ── VIEW ── */
-    .view { display: none; }
-    .view.active { display: block; animation: viewIn .25s ease both; }
-    @keyframes viewIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-
-    /* ── PAGE HEADER ── */
-    .page-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
-    .page-title { font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: -0.02em; }
-    .page-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
-    .page-actions { display: flex; gap: 10px; flex-shrink: 0; }
-
-    /* ── CARDS ── */
-    .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); transition: all .2s ease; }
-    .card:hover { box-shadow: var(--shadow-lg); }
-    .card-p { padding: 20px 24px; }
-
-    .stat-card {
-      background: #fff; border: 1px solid var(--border);
-      border-radius: var(--radius); padding: 20px;
-      display: flex; flex-direction: column; position: relative; overflow: hidden;
-      transition: all .2s ease; box-shadow: var(--shadow);
-    }
-    .stat-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
-    .stat-label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-    .stat-val { font-size: 26px; font-weight: 800; line-height: 1.2; color: var(--text); }
-    .stat-sub { font-size: 12px; color: var(--sub); margin-top: 6px; }
-
-    .sc-red   { border-top: 4px solid var(--red);   } .sc-red   .stat-val { color: var(--red);   }
-    .sc-green { border-top: 4px solid var(--green); } .sc-green .stat-val { color: var(--green); }
-    .sc-amber { border-top: 4px solid var(--amber); } .sc-amber .stat-val { color: var(--amber); }
-    .sc-blue  { border-top: 4px solid var(--blue);  } .sc-blue  .stat-val { color: var(--blue);  }
-    .sc-slate { border-top: 4px solid var(--slate); } .sc-slate .stat-val { color: var(--slate); }
-
-    /* ── GRIDS ── */
-    .g2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
-    .g3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
-    .g4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
-
-    /* ── TABLE ── */
-    .tbl-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); background: #fff; }
-    table.tbl { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 13px; }
-    table.tbl th {
-      font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-      color: var(--muted); background: #F8FAFC; padding: 12px 16px;
-      border-bottom: 2px solid var(--border); text-align: left; white-space: nowrap;
-      position: sticky; top: 0; z-index: 5;
-    }
-    table.tbl td { padding: 12px 16px; border-bottom: 1px solid #F1F5F9; color: var(--text); vertical-align: middle; font-size: 13px; }
-    table.tbl tr:last-child td { border-bottom: none; }
-    table.tbl tr:hover td { background: #F8FAFC; }
-    table.tbl td.num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-
-    /* ── BADGE ── */
-    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap; letter-spacing: .02em; }
-    .b-red    { background: #FAD2CF; color: #991B1B; border: 1px solid #F6AEA9; }
-    .b-green  { background: #DCFCE7; color: #137333; border: 1px solid #A8DAB5; }
-    .b-amber  { background: #FEEFC3; color: #854D0E; border: 1px solid #FDE293; }
-    .b-blue   { background: #DBEAFE; color: #1E40AF; border: 1px solid #BFDBFE; }
-    .b-slate  { background: #F3F4F6; color: #374151; border: 1px solid #E5E7EB; }
-
-    /* ── BUTTONS ── */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      padding: 10px 20px; border-radius: 10px; font-size: 13px; font-weight: 600;
-      border: 1px solid transparent; cursor: pointer;
-      transition: all .2s cubic-bezier(.4,0,.2,1); font-family: inherit;
-    }
-    .btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
-    .btn:active { transform: translateY(0); }
-    .btn-primary { background: var(--red); color: #fff; border-color: var(--red); }
-    .btn-primary:hover { background: var(--red-d); }
-    .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { background: #F8FAFC; border-color: #CBD5E1; }
-    .btn-green { background: var(--green); color: #fff; }
-    .btn-green:hover { background: var(--green-d); }
-    .btn-amber { background: var(--amber); color: #fff; }
-    .btn-amber:hover { background: var(--amber-d); }
-    .btn-ghost { background: transparent; color: var(--muted); }
-    .btn-ghost:hover { background: rgba(0,0,0,.05); color: var(--text); }
-    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 8px; }
-    .btn:disabled { opacity: .5; cursor: not-allowed; }
-
-    /* ── FORMS ── */
-    .form-group { margin-bottom: 16px; }
-    .form-label { font-size: 12px; font-weight: 600; color: var(--slate); margin-bottom: 6px; display: block; }
-    .form-label span.req { color: var(--red); }
-    .form-input {
-      width: 100%; padding: 10px 14px; border: 1.5px solid var(--border);
-      border-radius: 10px; font-size: 13px; font-family: inherit;
-      color: var(--text); background: #fff; outline: none; transition: all .2s ease;
-    }
-    .form-input:focus { border-color: var(--red); box-shadow: 0 0 0 4px rgba(234,67,53,.08); }
-    .form-input::placeholder { color: var(--sub); }
-    .form-row   { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; }
-    .form-row-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
-
-    /* ── FILTER PILLS ── */
-    .filter-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-    .fpill {
-      padding: 6px 14px; border-radius: 99px; border: 1.5px solid var(--border);
-      background: #fff; font-size: 12px; font-weight: 600; color: var(--muted);
-      cursor: pointer; transition: all .2s ease;
-    }
-    .fpill:hover { border-color: var(--red); color: var(--red); background: var(--red-l); }
-    .fpill.active { background: var(--dark); color: #fff; border-color: var(--dark); }
-    .fpill.active.red { background: var(--red); border-color: var(--red); }
-
-    /* ── SEARCH ── */
-    .search-wrap { position: relative; }
-    .search-wrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--sub); font-size: 12px; pointer-events: none; }
-    .search-wrap .form-input { padding-left: 30px; }
-
-    /* ── MODAL ── */
-    .modal-overlay {
-      position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 80;
-      display: none; align-items: center; justify-content: center; padding: 16px;
-      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-    }
-    .modal-overlay.show { display: flex; }
-    .modal-box {
-      background: #fff; border-radius: 20px; width: 100%;
-      max-width: 560px; max-height: 92vh; overflow-y: auto;
-      box-shadow: 0 25px 50px -12px rgba(0,0,0,.25);
-      animation: modalIn .3s cubic-bezier(.34,1.56,.64,1);
-    }
-    @keyframes modalIn { from { opacity:0; transform:scale(.95) translateY(10px); } to { opacity:1; transform:scale(1) translateY(0); } }
-    .modal-box.modal-sm { max-width: 400px; }
-    .modal-hd { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); background: #F8FAFC; }
-    .modal-title { font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; }
-    .modal-title i { font-size: 16px; color: var(--red); }
-    .modal-close { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 6px; transition: all .15s; }
-    .modal-close:hover { background: var(--red-l); color: var(--red); }
-    .modal-body { padding: 24px; }
-    .modal-ft { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 12px; justify-content: flex-end; background: #F8FAFC; }
-
-    /* ── PAGER ── */
-    .pager { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-top: 1px solid var(--border); background: #F8FAFC; border-radius: 0 0 var(--radius) var(--radius); }
-    .pager-info { font-size: 12px; color: var(--muted); font-weight: 500; }
-    .pager-btns { display: flex; gap: 6px; align-items: center; }
-    .pager-btn { width: 32px; height: 32px; border-radius: 8px; border: 1.5px solid var(--border); background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--muted); transition: all .2s ease; font-size: 12px; }
-    .pager-btn:hover:not(:disabled) { border-color: var(--red); color: var(--red); background: var(--red-l); }
-    .pager-btn:disabled { opacity: .3; cursor: not-allowed; }
-    .pager-page { font-size: 12px; font-weight: 700; color: var(--text); padding: 0 10px; }
-
-    /* ── EMPTY STATE ── */
-    .empty { text-align: center; padding: 48px 24px; }
-    .empty i { font-size: 40px; color: #CBD5E1; margin-bottom: 14px; display: block; }
-    .empty p { font-size: 14px; color: var(--muted); font-weight: 600; }
-    .empty small { font-size: 12px; color: var(--sub); margin-top: 6px; display: block; }
-
-    /* ── PROFIT / LOSS COLORS ── */
-    .profit { color: var(--green) !important; font-weight: 700; }
-    .loss   { color: var(--red)   !important; font-weight: 700; }
-    .mono   { font-variant-numeric: tabular-nums; font-weight: 600; }
-
-    /* ── CHART BOX ── */
-    .chart-box { position: relative; }
-    .chart-box canvas { width: 100% !important; }
-
-    /* ── INFO BOX ── */
-    .info-box { border-radius: 8px; padding: 10px 14px; font-size: 12px; display: flex; gap: 8px; align-items: flex-start; margin-bottom: 12px; }
-    .info-box.blue  { background: #E8F0FE; border: 1px solid #BFDBFE; color: #1967D2; }
-    .info-box.amber { background: #FEF7E0; border: 1px solid #FDD663; color: #EA8600; }
-    .info-box.green { background: #E6F4EA; border: 1px solid #A8DAB5; color: #137333; }
-    .info-box i { margin-top: 1px; flex-shrink: 0; }
-
-    /* ════════════════════════════════════════════
-       LOGIN PAGE
-    ════════════════════════════════════════════ */
-    #login-wrapper {
-      height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 16px; background: var(--bg); position: relative;
-    }
-    #login-wrapper::before {
-      content: ''; position: fixed; inset: 0; z-index: 0;
-      background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
-      background-size: 40px 40px; opacity: .55; pointer-events: none;
-    }
-    #login-wrapper::after {
-      content: ''; position: fixed; top: -140px; right: -140px;
-      width: 480px; height: 480px; border-radius: 50%;
-      background: radial-gradient(circle, rgba(234,67,53,.07) 0%, transparent 65%);
-      z-index: 0; pointer-events: none;
-    }
-    #login-wrapper .card {
-      position: relative; z-index: 1;
-      width: 100%; max-width: 400px;
-      background: #fff; border: 1px solid var(--border); border-radius: 18px;
-      padding: 38px 34px 32px;
-      box-shadow: 0 2px 4px rgba(0,0,0,.04), 0 16px 48px rgba(0,0,0,.09);
-      animation: cardIn .4s cubic-bezier(.16,1,.3,1) both;
-    }
-    @keyframes cardIn { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:none; } }
-    #login-wrapper .card::before {
-      content: ''; position: absolute; top: -1px; left: 14%; right: 14%;
-      height: 2.5px;
-      background: linear-gradient(90deg, transparent, var(--teal), transparent);
-      border-radius: 0 0 3px 3px; opacity: .8;
-    }
-    .logo-area { text-align: center; margin-bottom: 22px; }
-    .logo-box {
-      display: inline-flex; align-items: center; justify-content: center;
-      background: #fff; border: 1.5px solid var(--border); border-radius: 10px;
-      padding: 8px 20px; margin-bottom: 16px;
-      box-shadow: 0 1px 4px rgba(0,0,0,.06);
-      animation: logoPop .5s .08s cubic-bezier(.34,1.56,.64,1) both;
-    }
-    @keyframes logoPop { from { opacity:0; transform:scale(.7); } to { opacity:1; transform:none; } }
-    .logo-box img { height: 42px; width: auto; display: block; object-fit: contain; }
-    .co-name { font-size: 19px; font-weight: 800; color: var(--text); letter-spacing: -.2px; margin-bottom: 5px; }
-    .co-name em { color: var(--teal); font-style: normal; }
-    .co-sub { font-size: 13px; color: var(--muted); font-weight: 400; margin-bottom: 2px; }
-    .co-tag { font-size: 11.5px; color: var(--sub); font-weight: 400; }
-
-    .fl { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; display: block; }
-    .fw { position: relative; margin-bottom: 14px; }
-    .fi { width: 100%; background: #fff; border: 1.5px solid var(--border); border-radius: 9px; padding: 11px 12px 11px 38px; font-size: 13.5px; font-family: inherit; color: var(--text); outline: none; transition: border-color .15s, box-shadow .15s; }
-    .fi::placeholder { color: var(--sub); font-size: 13px; }
-    .fi:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(234,67,53,.08); }
-    .fic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--sub); font-size: 13px; pointer-events: none; transition: color .15s; }
-    .fw:focus-within .fic { color: var(--red); }
-    .eye { position: absolute; right: 11px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--sub); font-size: 13px; padding: 3px; transition: color .15s; }
-    .eye:hover { color: var(--text); }
-
-    .eb { display: none; align-items: center; gap: 8px; background: #FCE8E6; border: 1.5px solid #F6AEA9; border-radius: 8px; padding: 9px 12px; margin-bottom: 13px; }
-    .eb.on { display: flex; animation: shake .35s ease; }
-    .eb i { color: #EF4444; font-size: 13px; flex-shrink: 0; }
-    .eb span { color: #C5221F; font-size: 12.5px; line-height: 1.4; }
-    @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-5px)} 40%{transform:translateX(5px)} 60%{transform:translateX(-3px)} 80%{transform:translateX(3px)} }
-
-    #login-wrapper .btn { width: 100%; padding: 13px; background: var(--red); border: none; border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 14.5px; font-weight: 700; color: #fff; letter-spacing: .1px; box-shadow: 0 3px 14px rgba(234,67,53,.32); transition: background .18s, transform .15s, box-shadow .15s; position: relative; overflow: hidden; margin-top: 4px; }
-    #login-wrapper .btn:hover { background: var(--red-d); transform: translateY(-1px); }
-    #login-wrapper .btn:active { transform: translateY(0); }
-    #login-wrapper .btn .bt { transition: opacity .15s; }
-    #login-wrapper .btn .bs { display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); }
-    #login-wrapper .btn.busy .bt { opacity: 0; }
-    #login-wrapper .btn.busy .bs { display: block; }
-    .sp { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: rot .6s linear infinite; }
-    @keyframes rot { to { transform: rotate(360deg); } }
-
-    .wc { display: none; text-align: center; animation: wIn .4s cubic-bezier(.16,1,.3,1) both; }
-    @keyframes wIn { from { opacity:0; transform:scale(.94); } to { opacity:1; transform:none; } }
-    .wav { width: 68px; height: 68px; border-radius: 50%; margin: 0 auto 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: #fff; background: var(--red); box-shadow: 0 5px 18px rgba(234,67,53,.38); }
-    .wn { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 3px; }
-    .wd { font-size: 10.5px; font-weight: 700; color: var(--red); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
-    .we { font-size: 11.5px; color: var(--muted); margin-bottom: 18px; }
-    .wm { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
-    .wm strong { color: var(--red); font-weight: 700; }
-    .bgo { display: inline-flex; align-items: center; gap: 7px; padding: 11px 26px; border-radius: 10px; border: none; cursor: pointer; background: var(--red); font-family: inherit; font-size: 13.5px; font-weight: 700; color: #fff; box-shadow: 0 3px 14px rgba(234,67,53,.32); transition: background .18s, transform .15s; }
-    .bgo:hover { background: var(--red-d); transform: translateY(-1px); }
-    .foot { text-align: center; margin-top: 22px; font-size: 11px; color: var(--sub); }
-    .foot em { color: var(--red); font-style: normal; font-weight: 500; }
-
-    #app-wrapper { display: none; height: 100vh; width: 100vw; overflow: hidden; }
-
-    /* ── SUMMARY TABLE ROWS ── */
-    .cur-month td { background: var(--amber-l) !important; }
-    .total-row td { background: #F8FAFC !important; font-weight: 800; border-top: 2px solid var(--border); }
-
-    /* ── HEALTH BAR ── */
-    .health-bar-wrap { margin-bottom: 14px; }
-    .health-bar-lbl  { display:flex;justify-content:space-between;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px; }
-    .health-bar-track{ height:7px;background:var(--border);border-radius:7px;overflow:hidden; }
-    .health-bar-fill { height:100%;border-radius:7px;transition:width .8s ease; }
-
-    /* ── btn-amber variant ── */
-    .btn-amber { background: var(--amber); color: #fff; border-color: var(--amber); }
-    .btn-amber:hover { background: var(--amber-d); }
-
-    /* ── table num column ── */
-    table.tbl td.num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
-
-    /* ── print ── */
-    @media print {
-      #sb, #topbar { display: none !important; }
-      #content { padding: 0; }
-      .card { box-shadow: none; break-inside: avoid; }
-    }
-
-    /* ── SUMMARY TABLE ── */
-    .cur-month td { background: #FEF7E0 !important; font-weight: 700; }
-    .total-row td { background: #F8FAFC !important; font-weight: 800; border-top: 2px solid var(--border); }
-
-    /* ── HEALTH BAR ── */
-    .health-bar-wrap { margin-bottom: 12px; }
-    .health-bar-lbl { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
-    .health-bar-track { height: 7px; background: var(--border); border-radius: 7px; overflow: hidden; }
-    .health-bar-fill { height: 100%; border-radius: 7px; transition: width .8s ease; }
-
-    /* ── STAT STRIP (key value rows) ── */
-    .kv-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-radius: 9px; background: var(--bg); border: 1px solid var(--border); margin-bottom: 8px; }
-    .kv-lbl { font-size: 12px; font-weight: 600; color: var(--muted); }
-    .kv-val { font-size: 13.5px; font-weight: 800; }
-
-    /* ── MOBILE BACKDROP ── */
-    #sb-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9998; backdrop-filter: blur(2px); }
-    #sb-backdrop.show { display: block; }
-    #sb.mobile-show { left: 0 !important; box-shadow: 12px 0 60px rgba(0,0,0,.55); }
-
-    /* ════════════════════════════════════════════
-       RESPONSIVE
-    ════════════════════════════════════════════ */
-    @media (min-width: 1281px) {
-      #sb { width: 260px; }
-      .g4 { grid-template-columns: repeat(4,1fr); }
-      #content { padding: 28px; }
-    }
-    @media (min-width: 1025px) and (max-width: 1280px) {
-      #sb:not(.mobile-show) { width: 64px !important; }
-      #sb:not(.mobile-show) .sb-lbl,
-      #sb:not(.mobile-show) .sb-logo-text,
-      #sb:not(.mobile-show) .sb-user-meta,
-      #sb:not(.mobile-show) .sb-logout-lbl,
-      #sb:not(.mobile-show) .sb-section-label,
-      #sb:not(.mobile-show) .sb-collapse-btn { display: none !important; }
-      #sb:not(.mobile-show) .sb-header { padding: 0; justify-content: center; }
-      #sb:not(.mobile-show) .sb-logo-box { width: 44px; height: 44px; padding: 0; justify-content: center; }
-      #sb:not(.mobile-show) #sb-logo-full { display: none !important; }
-      #sb:not(.mobile-show) #sb-logo-mini { display: flex !important; }
-      #sb:not(.mobile-show) .sb-nav-item { justify-content: center; padding: 10px 0; margin: 2px 8px; width: 48px; }
-      #sb:not(.mobile-show) .sb-nav-item i { font-size: 16px; width: auto; margin: 0; }
-      #sb:not(.mobile-show) .sb-user-card { width: 48px; justify-content: center; padding: 8px 0; margin: 0 auto 8px; background: none; border: none; }
-      #sb:not(.mobile-show) .sb-logout-btn { width: 48px; justify-content: center; padding: 8px 0; margin: 0 auto; }
-      .g4 { grid-template-columns: repeat(2,1fr) !important; }
-      #content { padding: 20px; }
-    }
-    @media (min-width: 769px) and (max-width: 1024px) {
-      :root { --sidebar-w: 200px; --topbar-h: 58px; }
-      #sb { width: 200px !important; }
-      .g3, .g4 { grid-template-columns: repeat(2,1fr) !important; }
-      #content { padding: 16px; }
-      #topbar { padding: 0 16px; }
-      table.tbl { font-size: 12px; }
-      .stat-val { font-size: 22px !important; }
-      .page-title { font-size: 18px; }
-    }
-    @media (max-width: 768px) {
-      :root { --sidebar-w: 0px; --topbar-h: 54px; }
-      #sb { position: fixed; left: -280px; top: 0; bottom: 0; width: 280px !important; z-index: 9999; transition: left .28s cubic-bezier(.4,0,.2,1); }
-      #sb.collapsed { width: 280px !important; }
-      #sb.collapsed .sb-lbl, #sb .sb-lbl,
-      #sb.collapsed .sb-logo-text, #sb .sb-logo-text,
-      #sb.collapsed .sb-user-meta, #sb .sb-user-meta,
-      #sb.collapsed .sb-section-label, #sb .sb-section-label { display: block !important; }
-      #sb .sb-nav-item { justify-content: flex-start !important; padding: 11px 14px !important; margin: 2px 10px !important; width: auto !important; gap: 12px !important; }
-      .hide-sm { display: none !important; }
-      #topbar { padding: 0 12px; }
-      #content { padding: 12px; }
-      .g2, .g3, .g4 { grid-template-columns: 1fr !important; }
-      .form-row, .form-row-3 { grid-template-columns: 1fr !important; }
-      .page-hd { flex-direction: column; align-items: stretch; gap: 10px; margin-bottom: 16px; }
-      .page-title { font-size: 18px; }
-      .page-actions .btn { width: 100%; justify-content: center; }
-      .modal-overlay { padding: 0; align-items: flex-end; }
-      .modal-box { border-radius: 20px 20px 0 0 !important; max-height: 90vh !important; width: 100% !important; max-width: 100% !important; }
-      .modal-ft .btn { flex: 1; justify-content: center; }
-      .filter-row { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
-      .filter-row::-webkit-scrollbar { display: none; }
-      .fpill { flex-shrink: 0; }
-    }
-    @media (max-width: 480px) {
-      :root { --topbar-h: 50px; }
-      .tb-breadcrumb { display: none !important; }
-      #content { padding: 10px; }
-      .stat-val { font-size: 20px !important; }
-      .page-title { font-size: 16px; }
-      #login-wrapper .card { padding: 28px 20px 24px; border-radius: 14px; }
-      .logo-box img { height: 34px; }
-    }
-    @media (hover: none) {
-      .stat-card:hover { transform: none; }
-      .btn:hover { transform: none; }
-      .sb-nav-item:hover { transform: none; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
-    }
-
-    /* ── LOADER must show flex ── */
-    #loader { display: flex; }
-
-    /* ── VIEWS: section tags need same treatment as div ── */
-    section.view { display: none; }
-    section.view.active { display: block; animation: viewIn .25s ease both; }
-
-    /* ── TABLE must have tbl class styling ── */
-    table.tbl th { position: sticky; top: 0; z-index: 2; }
-
-    /* ── SEARCH input left icon padding ── */
-    .search-wrap input.form-input { padding-left: 32px; }
-
-    /* ── btn-amber ── */
-    .btn-amber { background: var(--amber); color: #fff; border-color: var(--amber); }
-    .btn-amber:hover { background: var(--amber-d); }
-
-    /* ── btn-green ── */  
-    .btn-green { background: var(--green); color: #fff; }
-    .btn-green:hover { background: var(--green-d); }
-
-    /* ── stat-card watermark icon ── */
-    .stat-card .sc-icon {
-      position: absolute; right: 15px; bottom: 10px;
-      font-size: 48px; opacity: .06; transform: rotate(-10deg);
-      pointer-events: none;
-    }
-
-    /* ── PAGER ── */
-    .pager { display:flex;align-items:center;justify-content:space-between;
-      padding:12px 16px;border-top:1px solid var(--border);
-      background:#F8FAFC;border-radius:0 0 var(--radius) var(--radius); }
-    .pager-info { font-size:12px;color:var(--muted);font-weight:500; }
-    .pager-btns { display:flex;gap:6px;align-items:center; }
-    .pager-btn {
-      width:32px;height:32px;border-radius:8px;border:1.5px solid var(--border);
-      background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
-      color:var(--muted);transition:all .2s;font-size:12px;
-    }
-    .pager-btn:hover:not(:disabled) { border-color:var(--red);color:var(--red);background:var(--red-l); }
-    .pager-btn:disabled { opacity:.3;cursor:not-allowed; }
-    .pager-page { font-size:12px;font-weight:700;color:var(--text);padding:0 10px; }
-
-    /* ── KV ROW (key-value) ── */
-    .kv-row { display:flex;align-items:center;justify-content:space-between;
-      padding:10px 0;border-bottom:1px solid var(--border); }
-    .kv-row:last-child { border-bottom:none; }
-    .kv-lbl { font-size:12px;font-weight:600;color:var(--muted); }
-    .kv-val { font-size:13.5px;font-weight:800; }
-
-    /* ── INFO BOX ── */
-    .info-box { border-radius:8px;padding:10px 14px;font-size:12px;
-      display:flex;gap:8px;align-items:flex-start;margin-bottom:12px; }
-    .info-box.blue { background:#E8F0FE;border:1px solid #BFDBFE;color:#1967D2; }
-    .info-box.amber { background:var(--amber-l);border:1px solid #FDD663;color:#EA8600; }
-    .info-box.green { background:var(--green-l);border:1px solid #A8DAB5;color:#137333; }
-    .info-box i { margin-top:1px;flex-shrink:0; }
-
-    /* ── HEALTH BAR ── */
-    .health-bar-wrap { margin-bottom:14px; }
-    .health-bar-lbl { display:flex;justify-content:space-between;
-      font-size:12px;font-weight:600;color:var(--muted);margin-bottom:5px; }
-    .health-bar-track { height:7px;background:var(--border);border-radius:7px;overflow:hidden; }
-    .health-bar-fill { height:100%;border-radius:7px;transition:width .8s ease; }
-
-    /* ── SUMMARY TABLE ROWS ── */
-    .cur-month td { background:var(--amber-l) !important; }
-    .total-row td { background:#F8FAFC !important;font-weight:800;border-top:2px solid var(--border); }
-
-    /* ── CARD TOP ICON (watermark) ── */
-    .stat-card { overflow: hidden; }
-
-    /* ── PROFIT / LOSS ── */
-    .profit { color: var(--green) !important; font-weight: 700; }
-    .loss   { color: var(--red)   !important; font-weight: 700; }
-
-    /* ── TABLE num ── */
-    table.tbl td.num { text-align:right;font-weight:600;font-variant-numeric:tabular-nums; }
-
-    /* ── CARD-P consistent padding ── */
-    .card-p { padding: 16px 20px; }
-
-    /* ── SPINNING ── */
-    #refresh-icon.spinning { animation: spin .7s linear infinite; }
-
-    /* ── BUSY btn ── */
-    .btn.busy { opacity:.65;pointer-events:none; }
-    .btn.busy::after { content:''; display:inline-block;width:14px;height:14px;
-      border:2px solid rgba(255,255,255,.4);border-top-color:#fff;
-      border-radius:50%;animation:spin .7s linear infinite;margin-left:8px; }
-
-    /* ── PRINT ── */
-    @media print {
-      #sb, #topbar { display:none !important; }
-      #content { padding:0; }
-      .card { box-shadow:none;break-inside:avoid; }
-    }
+    :root{--navy:#0f172a;--navy2:#1e293b;--blue:#2563eb;--blue-d:#1d4ed8;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#059669;--green-l:#ecfdf5;--orange:#d97706;--red:#dc2626;--red-l:#fef2f2;--amber:#f59e0b;--purple:#7c3aed;--shadow:0 1px 3px rgba(15,23,42,.06),0 4px 12px rgba(15,23,42,.04);--radius:12px;--sidebar-w:240px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{-webkit-text-size-adjust:100%;height:100%}
+    body{font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden;height:100%;margin:0}
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .app{display:none;min-height:100vh;min-height:100dvh}
+    .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--navy);color:#fff;display:flex;flex-direction:column;z-index:30;transition:width .22s ease,transform .22s ease;overflow:hidden}
+    .main{margin-left:var(--sidebar-w);width:calc(100% - var(--sidebar-w));min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;min-width:0;transition:margin-left .22s ease,width .22s ease}
+    .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:25}
+    .sidebar-overlay.show{display:block}
+    .app.collapsed .sidebar{width:72px}
+    .app.collapsed .main{margin-left:72px;width:calc(100% - 72px)}
+    .brand{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0}
+    .brand .logo-row{display:flex;align-items:center;gap:10px}
+    .brand .logo-mark{background:#fff;color:var(--navy);font-weight:800;font-size:12px;padding:3px 7px;border-radius:4px}
+    .brand .logo-text{font-size:15px;font-weight:700;letter-spacing:-.3px}
+    .brand small{display:block;color:#64748b;font-size:10px;margin-top:5px}
+    .nav{padding:12px 10px;display:flex;flex-direction:column;gap:2px;flex:1;overflow-y:auto}
+    .sb-nav-item{border:0;background:transparent;color:#94a3b8;text-align:left;padding:11px 12px;border-radius:8px;display:flex;align-items:center;gap:12px;font-weight:500;font-size:13.5px;width:100%;transition:all .15s;cursor:pointer}
+    .sb-nav-item:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
+    .sb-nav-item.active{background:var(--blue);color:#fff;box-shadow:0 4px 12px rgba(37,99,235,.35)}
+    .sidebottom{padding:12px;border-top:1px solid rgba(255,255,255,.06);flex-shrink:0}
+    .topbar{height:56px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 20px;gap:12px;position:sticky;top:0;z-index:20}
+    .topbar h1{font-size:15.5px;font-weight:650;letter-spacing:-.2px;margin:0}
+    .content{padding:20px 24px 36px;width:100%;min-width:0}
+    .welcome{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+    .welcome h2{font-size:17px;font-weight:700;letter-spacing:-.3px;margin-bottom:3px}
+    .welcome p{color:var(--muted);font-size:13px}
+    .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+    .metric{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px 14px;box-shadow:var(--shadow);min-height:108px}
+    .metric.blue{background:linear-gradient(135deg,#f8faff,#f0f5ff);border-color:#dbe7ff}
+    .metric.green{background:linear-gradient(135deg,#f0fdf6,#ecfdf5);border-color:#bbf7d0}
+    .metric.orange{background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a}
+    .metric.red{background:linear-gradient(135deg,#fef2f2,#fee2e2);border-color:#fecaca}
+    .metric-label{font-size:11.5px;font-weight:500;color:#64748b;margin-bottom:5px}
+    .metric-value{font-size:22px;font-weight:700;letter-spacing:-.5px}
+    .metric-sub{font-size:11px;color:#94a3b8;margin-top:5px}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+    .panel-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .panel-head h3{font-size:13.5px;font-weight:650;margin:0}
+    .tablewrap{overflow-x:auto}
+    table{border-collapse:collapse;width:100%;font-size:12.5px}
+    th{text-align:left;background:#f8fafc;color:#64748b;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+    td{padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#334155}
+    tbody tr:hover{background:#fafbfc}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;font-weight:600;font-size:13px;border:1px solid transparent;transition:all .15s}
+    .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .btn.primary:hover{background:var(--blue-d)}
+    .btn.ghost{background:#fff;border-color:var(--line);color:#334155}
+    .btn.sm{padding:5px 10px;font-size:11.5px}
+    .view{display:none}
+    .view.active{display:block}
+    .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .search{border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 14px;min-width:180px;outline:none}
+    .emptyrow{text-align:center!important;padding:32px 12px!important;color:#94a3b8!important}
+    .pill{display:inline-flex;align-items:center;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:500}
+    .pill.green{background:#ecfdf5;color:#047857}
+    .pill.orange{background:#fffbeb;color:#b45309}
+    .pill.red{background:#fef2f2;color:#b91c1c}
+    .login{min-height:100vh;display:grid;place-items:center;background:linear-gradient(160deg,#f1f5f9,#e2e8f0);padding:20px}
+    .loginbox{width:min(400px,100%);background:#fff;border-radius:16px;padding:32px 28px;box-shadow:0 20px 60px rgba(15,23,42,.08);border:1px solid #e2e8f0}
+    .loginbrand{background:var(--navy);color:#fff;border-radius:10px;padding:16px 18px;margin-bottom:24px}
+    .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+    .field label{font-size:12px;font-weight:600;color:#334155}
+    .field input,.field select{width:100%;padding:11px 14px;border:1px solid #e2e8f0;border-radius:8px;outline:none}
+    .field input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+    .btn-block{width:100%;padding:12px}
+    .loginerr{font-size:12px;color:var(--red);margin-top:12px;display:none}
+    @media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:768px){.sidebar{transform:translateX(-100%);width:min(280px,86vw)}.sidebar.open{transform:translateX(0)}.main{margin-left:0!important;width:100%!important}.cards{grid-template-columns:1fr 1fr}.content{padding:14px 12px 28px}}
+    @media(max-width:420px){.cards{grid-template-columns:1fr}}
+    .loader{position:fixed;inset:0;background:rgba(248,250,252,.85);display:none;align-items:center;justify-content:center;z-index:50}
+    .loader.show{display:flex}
+    .spinner{width:32px;height:32px;border:2.5px solid #e2e8f0;border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    /* Additional utility and component styles to match full KBN theme depth */
+    .page-actions{display:flex;gap:8px;flex-shrink:0}
+    .datebox{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 13px;color:#475569;font-size:12px;font-weight:500;white-space:nowrap}
+    .link{color:var(--blue);font-size:12px;font-weight:500;cursor:pointer;margin-left:auto}
+    .count{margin-left:auto;color:var(--muted);font-size:12px}
+    .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .formgrid .full{grid-column:1/-1}
+    .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
+    .modal-overlay.show{display:flex}
+    .modal-box{width:min(520px,100%);background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(15,23,42,.18);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+    .modal-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+    .modal-body{padding:16px;overflow:auto;flex:1}
+    .modal-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+    /* Chart containers */
+    canvas{max-width:100%}
+    /* Empty states */
+    .empty{text-align:center;padding:40px 20px;color:#94a3b8}
+    .empty strong{display:block;color:#475569;margin-bottom:4px}
+    /* Sidebar user */
+    .sb-user{display:flex;align-items:center;gap:8px;padding:8px 0}
+    /* Mobile menu */
+    .mobilemenu{display:none;border:0;background:transparent;color:var(--ink);padding:6px}
+    @media(max-width:768px){.mobilemenu{display:grid}}
   </style>
 </head>
 <body>
 
-<!-- ══════════════ LOGIN ══════════════ -->
-<div id="login-wrapper">
-  <div class="card">
-    <div class="logo-area">
-      <div class="logo-box">
-        <img src="https://fresko.co.in/wp-content/uploads/2025/08/Untitled-design-21.png" alt="Fresko"
-             onerror="this.style.display='none'">
+<div class="login" id="login-wrapper">
+  <div class="loginbox">
+    <div class="loginbrand">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="logo-mark" style="background:#fff;color:var(--navy);font-weight:800;padding:4px 8px;border-radius:4px">FR</div>
+        <div>
+          <div style="font-size:16px;font-weight:700">Fresko P&L</div>
+          <small style="display:block;color:#94a3b8;font-size:11px;margin-top:3px">Profit & Loss Management System</small>
+        </div>
       </div>
-      <div class="co-name">Fresko <em>P&amp;L</em></div>
-      <div class="co-sub">Profit &amp; Loss Management System</div>
-      <div class="co-tag">Sign in to your account</div>
     </div>
-
-    <div id="form-area">
-      <label class="fl">Email Address</label>
-      <div class="fw">
-        <i class="fas fa-envelope fic"></i>
-        <input class="fi" id="f-email" type="email" placeholder="yourname@fresko.co.in"
-               autocomplete="username" spellcheck="false"
-               onkeydown="if(event.key==='Enter')document.getElementById('f-pass').focus()">
-      </div>
-      <label class="fl">Password</label>
-      <div class="fw">
-        <i class="fas fa-lock fic"></i>
-        <input class="fi" id="f-pass" type="password" placeholder="Enter your password"
-               autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-        <button class="eye" type="button" onclick="toggleEye(this)">
-          <i class="fas fa-eye"></i>
-        </button>
-      </div>
-      <div class="eb" id="eb"><i class="fas fa-exclamation-circle"></i><span id="et"></span></div>
-      <button class="btn" id="login-btn" onclick="doLogin()">
-        <span class="bt"><i class="fas fa-sign-in-alt" style="margin-right:7px"></i>Sign In</span>
-        <span class="bs"><div class="sp"></div></span>
-      </button>
-    </div>
-
-    <div class="wc" id="wc">
-      <div class="wav" id="wav"></div>
-      <div class="wn" id="wn"></div>
-      <div class="wd" id="wd-dept"></div>
-      <div class="we" id="we"></div>
-      <div class="wm">Authenticated successfully.<br>Welcome to the <strong>Fresko P&amp;L Tracker</strong>.</div>
-      <button class="bgo" onclick="enterApp()"><i class="fas fa-arrow-right"></i> Enter Dashboard</button>
-    </div>
-
-    <div class="foot">&copy; <span id="footer-year"></span> <em>Fresko</em> &middot; P&amp;L Management</div>
+    <h2 style="font-size:22px;font-weight:700;margin-bottom:6px">Sign in to your account</h2>
+    <p style="color:var(--muted);margin-bottom:22px">Access purchases, sales, expenses and full P&L reports.</p>
+    <form id="loginForm" onsubmit="return false">
+      <div class="field"><label>Email address</label><input type="email" id="f-email" placeholder="yourname@fresko.co.in" required autocomplete="username"></div>
+      <div class="field"><label>Password</label><input type="password" id="f-pass" placeholder="Enter your password" required autocomplete="current-password"></div>
+      <button type="button" class="btn primary btn-block" id="login-btn" onclick="doLogin()">Sign In</button>
+      <div class="loginerr" id="eb"></div>
+    </form>
+    <div style="font-size:11px;color:#94a3b8;margin-top:20px;text-align:center">© Fresko · P&L Management · FY 2025–26</div>
   </div>
 </div>
 
-<!-- ══════════════ APP ══════════════ -->
-<div id="app-wrapper">
-  <div id="shell">
-
-    <div id="sb-backdrop" onclick="toggleSB()"></div>
-
-    <aside id="sb" class="collapsed">
-      <div class="sb-header">
-        <div class="sb-logo-box">
-          <div id="sb-logo-full" style="display:flex;align-items:center;height:100%">
-            <img src="https://fresko.co.in/wp-content/uploads/2025/08/Untitled-design-21.png"
-                 alt="Fresko" style="height:28px;width:auto;display:block"
-                 onerror="this.style.display='none'">
-          </div>
-          <div id="sb-logo-mini"
-               style="display:none;width:36px;height:36px;background:linear-gradient(135deg,#EA4335,#C5221F);border-radius:9px;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(234,67,53,.45)">
-            <span style="color:#fff;font-size:11px;font-weight:900">P&L</span>
-          </div>
+<div class="app" id="app-wrapper">
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <aside class="sidebar" id="sb">
+    <div class="brand">
+      <div class="logo-row">
+        <div class="logo-mark">FR</div>
+        <div class="logo-text-wrap">
+          <span class="logo-text">Fresko P&L</span>
+          <small>FY 2025–26</small>
         </div>
-        <div class="sb-logo-text">
-          <strong>P&amp;L Tracker</strong>FY 2025–26
-        </div>
-        <button class="sb-collapse-btn" onclick="toggleSB()" title="Toggle sidebar">
-          <i class="fas fa-chevron-left" id="sb-chev" style="font-size:10px"></i>
-        </button>
       </div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="sb-nav-item active" onclick="goTo('dashboard')"><i class="fas fa-home"></i><span class="nav-label">Dashboard</span></div>
+      <div class="sb-nav-item" onclick="goTo('summary')"><i class="fas fa-chart-bar"></i><span class="nav-label">Annual Summary</span></div>
+      <div class="sb-nav-item" onclick="goTo('purchase')"><i class="fas fa-shopping-cart"></i><span class="nav-label">Purchase Entry</span></div>
+      <div class="sb-nav-item" onclick="goTo('sales')"><i class="fas fa-truck"></i><span class="nav-label">Sales Entry</span></div>
+      <div class="sb-nav-item" onclick="goTo('expenses')"><i class="fas fa-file-invoice-dollar"></i><span class="nav-label">Expenses Entry</span></div>
+      <div class="sb-nav-item" onclick="goTo('monthly')"><i class="fas fa-calendar-alt"></i><span class="nav-label">Monthly P&L</span></div>
+      <div class="sb-nav-item" onclick="goTo('analysis')"><i class="fas fa-chart-pie"></i><span class="nav-label">Party Analysis</span></div>
+      <div class="sb-nav-item" onclick="goTo('insights')"><i class="fas fa-lightbulb"></i><span class="nav-label">Insights</span></div>
+    </nav>
+    <div class="sidebottom">
+      <div class="sb-user">
+        <div id="sb-avatar" style="width:32px;height:32px;border-radius:50%;background:#334155;display:grid;place-items:center;font-weight:700;font-size:11px;color:#fff">U</div>
+        <div>
+          <div id="sb-uname" style="font-size:12px;font-weight:600">User</div>
+          <small id="sb-role" style="color:#64748b;font-size:10px">Role</small>
+        </div>
+      </div>
+      <button class="btn ghost sm" style="width:100%;margin-top:8px;background:rgba(255,255,255,.06);border:0;color:#94a3b8" onclick="logout()">Logout</button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="mobilemenu" id="mobileMenu"><i class="fas fa-bars"></i></button>
+      <h1 id="pageTitle">Dashboard</h1>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span id="tb-date" style="font-size:12px;color:var(--muted)"></span>
+        <button class="btn ghost sm" onclick="_loadData(true)"><i class="fas fa-sync"></i> Refresh</button>
+      </div>
+    </header>
+    <div class="content" id="content">
+      <div id="loader" class="loader"><div class="spinner"></div></div>
 
-      <nav class="sb-nav scroll">
-        <div class="sb-section-label">Overview</div>
-        <div class="sb-nav-item" id="nav-dashboard" data-tip="Dashboard" onclick="goTo('dashboard')">
-          <i class="fas fa-home"></i><span class="sb-lbl">Dashboard</span>
+      <!-- ==================== DASHBOARD ==================== -->
+      <section class="view active" id="v-dashboard">
+        <div class="welcome">
+          <div>
+            <h2 id="greeting">Good morning</h2>
+            <p>FY 2025–26 · Real-time Profit & Loss Overview</p>
+          </div>
+          <div class="datebox" id="dateRange">—</div>
         </div>
-        <div class="sb-nav-item" id="nav-summary" data-tip="Annual Summary" onclick="goTo('summary')">
-          <i class="fas fa-chart-bar"></i><span class="sb-lbl">Annual Summary</span>
+        <div class="cards">
+          <div class="metric blue">
+            <div class="metric-label">TOTAL PURCHASE</div>
+            <div class="metric-value" id="dash-purchase">₹0</div>
+            <div class="metric-sub">Year to date</div>
+          </div>
+          <div class="metric green">
+            <div class="metric-label">TOTAL SALE</div>
+            <div class="metric-value" id="dash-sale">₹0</div>
+            <div class="metric-sub">Year to date</div>
+          </div>
+          <div class="metric orange">
+            <div class="metric-label">TOTAL EXPENSES</div>
+            <div class="metric-value" id="dash-exp">₹0</div>
+            <div class="metric-sub">Year to date</div>
+          </div>
+          <div class="metric red">
+            <div class="metric-label">NET P/L</div>
+            <div class="metric-value" id="dash-net">₹0</div>
+            <div class="metric-sub" id="dash-margin">0% margin</div>
+          </div>
         </div>
+        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric">
+            <div class="metric-label">Gross Margin</div>
+            <div class="metric-value" id="dash-gross">₹0 (P)</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Net Margin %</div>
+            <div class="metric-value" id="dash-netm">0%</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Expense Ratio</div>
+            <div class="metric-value" id="dash-expr">0%</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Purchase vs Sale Trend</h3></div>
+          <canvas id="dash-chart" height="140"></canvas>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Recent Purchases</h3>
+            <span class="link" onclick="goTo('purchase')">View All →</span>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>Date</th><th>Qty</th><th>Amount</th><th>Added By</th></tr></thead>
+              <tbody id="dash-recent-pur"><tr><td colspan="4" class="emptyrow">Koi purchase entry nahi</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Recent Sales</h3>
+            <span class="link" onclick="goTo('sales')">View All →</span>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>Date</th><th>Party</th><th>Qty</th><th>Amount</th></tr></thead>
+              <tbody id="dash-recent-sale"><tr><td colspan="4" class="emptyrow">Koi sale entry nahi</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
-        <div class="sb-nav-divider"></div>
-        <div class="sb-section-label">Entry</div>
-        <div class="sb-nav-item" id="nav-purchase" data-tip="Purchase Entry" onclick="goTo('purchase')">
-          <i class="fas fa-shopping-cart"></i><span class="sb-lbl">Purchase Entry</span>
+      <!-- ==================== ANNUAL SUMMARY ==================== -->
+      <section class="view" id="v-summary">
+        <div class="welcome">
+          <div>
+            <h2>Annual Summary</h2>
+            <p>FY 2025–26 · Month-wise complete P&L statement</p>
+          </div>
         </div>
-        <div class="sb-nav-item" id="nav-sales" data-tip="Sales Entry" onclick="goTo('sales')">
-          <i class="fas fa-truck"></i><span class="sb-lbl">Sales Entry</span>
+        <div class="cards">
+          <div class="metric blue"><div class="metric-label">YTD PURCHASE</div><div class="metric-value" id="sum-purchase">₹0</div></div>
+          <div class="metric green"><div class="metric-label">YTD SALE</div><div class="metric-value" id="sum-sale">₹0</div></div>
+          <div class="metric orange"><div class="metric-label">YTD EXPENSES</div><div class="metric-value" id="sum-exp">₹0</div></div>
+          <div class="metric red"><div class="metric-label">NET PROFIT</div><div class="metric-value" id="sum-net">₹0</div></div>
         </div>
-        <div class="sb-nav-item" id="nav-expenses" data-tip="Expenses Entry" onclick="goTo('expenses')">
-          <i class="fas fa-file-invoice-dollar"></i><span class="sb-lbl">Expenses Entry</span>
+        <div class="panel">
+          <div class="panel-head"><h3>Month-wise Breakdown</h3><span class="count">★ Current month</span></div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>MONTH</th><th>PURCHASE (₹)</th><th>SALE (₹)</th><th>EXPENSES (₹)</th><th>GROSS P/L</th><th>NET P/L</th><th>MARGIN %</th></tr></thead>
+              <tbody id="sum-table"><tr><td colspan="7" class="emptyrow">No monthly data yet</td></tr></tbody>
+            </table>
+          </div>
         </div>
+      </section>
 
-        <div class="sb-nav-divider"></div>
-        <div class="sb-section-label">Reports</div>
-        <div class="sb-nav-item" id="nav-monthly" data-tip="Monthly P&L" onclick="goTo('monthly')">
-          <i class="fas fa-calendar-alt"></i><span class="sb-lbl">Monthly P&amp;L</span>
+      <!-- ==================== PURCHASE ENTRY ==================== -->
+      <section class="view" id="v-purchase">
+        <div class="welcome">
+          <div>
+            <h2>Purchase Entry</h2>
+            <p>Daily purchase record karein</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn ghost sm">Export CSV</button>
+            <button class="btn primary sm" onclick="openPurchaseModal()">New Entry</button>
+          </div>
         </div>
-        <div class="sb-nav-item" id="nav-analysis" data-tip="Party Analysis" onclick="goTo('analysis')">
-          <i class="fas fa-chart-pie"></i><span class="sb-lbl">Party Analysis</span>
+        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric"><div class="metric-label">TOTAL ENTRIES</div><div class="metric-value" id="pur-count">0</div></div>
+          <div class="metric"><div class="metric-label">TOTAL PURCHASE</div><div class="metric-value" id="pur-total">₹0</div></div>
+          <div class="metric"><div class="metric-label">AVG. PER ENTRY</div><div class="metric-value" id="pur-avg">—</div></div>
         </div>
-        <div class="sb-nav-item" id="nav-insights" data-tip="Insights" onclick="goTo('insights')">
-          <i class="fas fa-lightbulb"></i><span class="sb-lbl">Insights</span>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Purchase History</h3>
+            <span class="count" id="pur-records">0 records</span>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>#</th><th>DATE</th><th>QTY</th><th>AMOUNT</th><th>ADDED BY</th><th>TIMESTAMP</th></tr></thead>
+              <tbody id="pur-table"><tr><td colspan="6" class="emptyrow">Koi data nahi hai<br><small>No entries</small></td></tr></tbody>
+            </table>
+          </div>
         </div>
-      </nav>
+      </section>
 
-      <div class="sb-bottom">
-        <div class="sb-user-card">
-          <div class="sb-user-avatar" id="sb-avatar">FR</div>
-          <div class="sb-user-meta">
-            <div class="sb-user-name" id="sb-uname">Loading…</div>
-            <div class="sb-user-dept">
-              <span class="sb-role-badge" id="sb-role"
-                    style="background:rgba(234,67,53,.18);color:#EE675C">USER</span>
+      <!-- ==================== SALES ENTRY ==================== -->
+      <section class="view" id="v-sales">
+        <div class="welcome">
+          <div>
+            <h2>Sales Entry</h2>
+            <p>Party-wise daily sales record karein</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn ghost sm">Export CSV</button>
+            <button class="btn primary sm" onclick="openSalesModal()">New Entry</button>
+          </div>
+        </div>
+        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric"><div class="metric-label">LOCAL SALE</div><div class="metric-value" id="sale-local">₹0</div></div>
+          <div class="metric"><div class="metric-label">SUPPLY SALE</div><div class="metric-value" id="sale-supply">₹0</div></div>
+          <div class="metric"><div class="metric-label">TOTAL SALE</div><div class="metric-value" id="sale-total">₹0</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Sales History</h3>
+            <select id="sale-filter" class="search" style="max-width:180px;margin-left:auto">
+              <option>All Parties</option>
+              <option>LOCAL SALE</option>
+              <option>SUPPLY SALE</option>
+            </select>
+            <span class="count" id="sale-records">0 records</span>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>#</th><th>DATE</th><th>PARTY</th><th>QTY</th><th>AMOUNT</th><th>ADDED BY</th></tr></thead>
+              <tbody id="sale-table"><tr><td colspan="6" class="emptyrow">Koi data nahi hai<br><small>No entries</small></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== EXPENSES ENTRY ==================== -->
+      <section class="view" id="v-expenses">
+        <div class="welcome">
+          <div>
+            <h2>Expenses Entry</h2>
+            <p>Monthly operational expenses record karein</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn ghost sm">Export CSV</button>
+            <button class="btn primary sm" onclick="openExpenseModal()">New Entry</button>
+          </div>
+        </div>
+        <div class="cards" style="grid-template-columns:repeat(2,1fr)">
+          <div class="metric"><div class="metric-label">TOTAL EXPENSES (YTD)</div><div class="metric-value" id="exp-total">₹0</div></div>
+          <div class="metric"><div class="metric-label">EXPENSE RATIO (VS SALE)</div><div class="metric-value" id="exp-ratio">0%</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Expenses History</h3>
+            <span class="count" id="exp-records">0 entries</span>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>#</th><th>MONTH</th><th>AMOUNT</th><th>ADDED BY</th><th>TIMESTAMP</th></tr></thead>
+              <tbody id="exp-table"><tr><td colspan="5" class="emptyrow">Koi data nahi hai</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== MONTHLY P&L ==================== -->
+      <section class="view" id="v-monthly">
+        <div class="welcome">
+          <div>
+            <h2>Monthly P&L</h2>
+            <p>Month-wise detailed profit & loss statement</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn ghost sm">Export CSV</button>
+            <button class="btn ghost sm">Print</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Month-wise P&L Statement</h3>
+            <span class="count" id="mon-count">0 months</span>
+          </div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>MONTH</th><th>PURCHASE</th><th>SALE</th><th>EXPENSES</th><th>GROSS P/L</th><th>NET P/L</th><th>MARGIN %</th></tr></thead>
+              <tbody id="mon-table"><tr><td colspan="7" class="emptyrow">No data</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Monthly Purchase vs Sale vs Expenses</h3></div>
+          <canvas id="mon-chart" height="120"></canvas>
+        </div>
+      </section>
+
+      <!-- ==================== PARTY ANALYSIS ==================== -->
+      <section class="view" id="v-analysis">
+        <div class="welcome">
+          <div>
+            <h2>Party Analysis</h2>
+            <p>Party-wise sales breakdown & insights</p>
+          </div>
+        </div>
+        <div class="cards" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric"><div class="metric-label">Total Sale</div><div class="metric-value" id="party-total">₹0</div></div>
+          <div class="metric"><div class="metric-label">Party Types</div><div class="metric-value" id="party-types">0 types</div></div>
+          <div class="metric"><div class="metric-label">Total Transactions</div><div class="metric-value" id="party-tx">0 entries</div></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Party-wise Details</h3></div>
+          <div class="tablewrap">
+            <table>
+              <thead><tr><th>PARTY</th><th>TOTAL (₹)</th><th>TRANSACTIONS</th><th>AVG. (₹)</th><th>SHARE %</th></tr></thead>
+              <tbody id="party-table"><tr><td colspan="5" class="emptyrow">Party data nahi hai</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Sales Split</h3></div>
+          <canvas id="party-chart" height="90"></canvas>
+        </div>
+      </section>
+
+      <!-- ==================== INSIGHTS ==================== -->
+      <section class="view" id="v-insights">
+        <div class="welcome">
+          <div>
+            <h2>Business Insights</h2>
+            <p>FY 2025–26 ke key metrics & performance analysis</p>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="insights-content">
+            <div class="empty">
+              <strong>Yeh insights aapke actual data ke basis par automatically generate hote hain.</strong>
+              <p style="margin-top:8px">Data add karne ke baad yahan metrics dikhenge.</p>
             </div>
           </div>
         </div>
-        <button class="sb-logout-btn"
-                onclick="try{localStorage.removeItem('fresko_session')}catch(e){}location.reload()">
-          <i class="fas fa-sign-out-alt"></i>
-          <span class="sb-logout-lbl">Sign Out</span>
-        </button>
-      </div>
-    </aside>
-
-    <div id="main">
-      <div id="topbar">
-        <button class="tb-toggle" onclick="toggleSB()" title="Toggle sidebar">
-          <i class="fas fa-bars" style="font-size:16px"></i>
-        </button>
-        <div class="tb-sep hide-sm"></div>
-        <div class="tb-breadcrumb">
-          <strong id="tb-title">Dashboard</strong>
-          <span class="hide-sm"> &mdash; <span id="tb-sub">Fresko P&amp;L Tracker</span></span>
+        <div class="panel">
+          <div class="panel-head"><h3>Purchase vs Sale vs Net P/L Trend</h3></div>
+          <canvas id="ins-chart" height="120"></canvas>
         </div>
-        <div class="tb-right">
-          <span id="tb-date" class="hide-sm" style="font-size:11px;color:var(--sub);font-weight:500"></span>
-          <button class="tb-btn" onclick="doRefresh()" title="Refresh">
-            <i class="fas fa-sync-alt" id="refresh-icon"></i>
-            <span class="hide-sm">Refresh</span>
-          </button>
-          <button class="tb-btn primary" id="tb-add-btn" style="display:none" onclick="openAddModal()">
-            <i class="fas fa-plus"></i>
-            <span id="tb-add-lbl">Add</span>
-          </button>
-        </div>
-      </div>
-
-      <div id="content" class="scroll">
-        <!-- Loader -->
-        <div id="loader" style="display:flex">
-          <div class="spin-ring"></div>
-          <div class="loader-text">Loading P&amp;L data…</div>
-        </div>
-
-        <section class="view" id="v-dashboard"></section>
-        <section class="view" id="v-summary"></section>
-        <section class="view" id="v-purchase"></section>
-        <section class="view" id="v-sales"></section>
-        <section class="view" id="v-expenses"></section>
-        <section class="view" id="v-monthly"></section>
-        <section class="view" id="v-analysis"></section>
-        <section class="view" id="v-insights"></section>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════ MODALS ══════════════ -->
-
-<!-- Purchase Modal — Manual Entry + PDF Import -->
-<div class="modal-overlay" id="m-pur">
-  <div class="modal-box" style="max-width:620px;width:96vw">
-    <div class="modal-hd">
-      <div class="modal-title"><i class="fas fa-shopping-cart"></i> Purchase Entry</div>
-      <button class="modal-close" onclick="closeModal('m-pur')"><i class="fas fa-times"></i></button>
-    </div>
-
-    <!-- Tabs -->
-    <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
-      <button id="pur-tab-manual" onclick="purTab('manual')"
-        style="flex:1;padding:10px 6px;font-size:12px;font-weight:700;border:none;cursor:pointer;
-               border-bottom:2px solid var(--red);color:var(--red);background:transparent;transition:all .2s">
-        <i class="fas fa-pen" style="margin-right:5px"></i>Manual Entry
-      </button>
-      <button id="pur-tab-pdf" onclick="purTab('pdf')"
-        style="flex:1;padding:10px 6px;font-size:12px;font-weight:600;border:none;cursor:pointer;
-               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
-        <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
-      </button>
-    </div>
-
-    <!-- ── MANUAL TAB ── -->
-    <div id="pur-panel-manual" class="modal-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Date <span class="req">*</span></label>
-          <input class="form-input" type="date" id="pur-date">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Total Qty Purchased</label>
-          <input class="form-input" type="number" id="pur-qty" placeholder="e.g. 530" min="0">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Total Purchase Amount (₹) <span class="req">*</span></label>
-        <input class="form-input" type="number" id="pur-amt" placeholder="e.g. 67890" min="0">
-      </div>
-      <div class="info-box blue"><i class="fas fa-info-circle"></i>
-        <span>Entry save hone ke baad SUMMARY sheet automatically update ho jaayegi.</span>
-      </div>
-    </div>
-
-    <!-- ── PDF IMPORT TAB ── -->
-    <div id="pur-panel-pdf" class="modal-body" style="display:none">
-
-      <!-- Step 1: File Upload -->
-      <div id="pdf-step-1">
-        <!-- Drop Zone -->
-        <div id="pdf-dropzone"
-          onclick="document.getElementById('pdf-file-input').click()"
-          ondragover="event.preventDefault();this.style.borderColor='var(--red)';this.style.background='var(--red-l)'"
-          ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'"
-          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--bg)';handlePDFDrop(event)"
-          style="border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
-                 text-align:center;cursor:pointer;background:var(--bg);transition:all .2s;margin-bottom:14px">
-          <i class="fas fa-file-pdf" style="font-size:36px;color:var(--red);margin-bottom:10px;display:block"></i>
-          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">
-            PDF File Yahan Drop Karein
-          </div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
-            ya click karke select karein
-          </div>
-          <div style="display:inline-flex;align-items:center;gap:6px;background:var(--red);color:#fff;
-                      padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700">
-            <i class="fas fa-folder-open"></i> Browse File
-          </div>
-          <input type="file" id="pdf-file-input" accept=".pdf" style="display:none"
-            onchange="handlePDFFileSelect(this)">
-        </div>
-
-        <div class="info-box blue">
-          <i class="fas fa-info-circle"></i>
-          <span>Accounting software se export hua <strong>Purchase Register PDF</strong> upload karein. App <strong>DATE TOTAL</strong> rows se date-wise entries automatically extract karega.</span>
-        </div>
-
-        <!-- Loading state -->
-        <div id="pdf-loading" style="display:none;text-align:center;padding:20px">
-          <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--red);margin-bottom:8px;display:block"></i>
-          <div style="font-size:13px;font-weight:600;color:var(--text)" id="pdf-loading-text">PDF read ho raha hai…</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="pdf-loading-page">Page 0 / 0</div>
-        </div>
-      </div>
-
-      <!-- Step 2: Preview -->
-      <div id="pdf-step-2" style="display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <span style="font-size:13px;font-weight:700;color:var(--text)">
-            <i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>
-            <span id="pdf-found-count">0</span> entries extract hue
-          </span>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span id="pdf-file-name" style="font-size:11px;color:var(--muted)"></span>
-            <button onclick="pdfReset()"
-              style="font-size:11px;color:var(--muted);border:none;background:none;cursor:pointer;text-decoration:underline">
-              ↩ Change File
-            </button>
-          </div>
-        </div>
-
-        <div id="pdf-preview-table"
-          style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
-        </div>
-
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--green-l);
-                    border:1px solid #A8DAB5;border-radius:8px;margin-bottom:12px">
-          <i class="fas fa-rupee-sign" style="color:var(--green);font-size:20px"></i>
-          <div style="flex:1">
-            <div style="font-size:11px;color:var(--muted)">Total Net Amount</div>
-            <div id="pdf-total-amt" style="font-size:17px;font-weight:800;color:var(--green)">₹0</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:11px;color:var(--muted)">Total Qty (kg)</div>
-            <div id="pdf-total-qty" style="font-size:14px;font-weight:700;color:var(--text)">0</div>
-          </div>
-        </div>
-
-        <div class="info-box amber">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>Preview check karein. Import ke baad entries sheet mein save ho jaayengi.</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="modal-ft">
-      <!-- Manual footer -->
-      <div id="pur-ft-manual" style="display:flex;gap:8px;width:100%;justify-content:flex-end">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-pur')">Cancel</button>
-        <button class="btn btn-primary btn-sm" id="pur-save" onclick="savePurchaseEntry()">
-          <i class="fas fa-save"></i> Save Entry
-        </button>
-      </div>
-      <!-- PDF footer -->
-      <div id="pur-ft-pdf" style="display:none;gap:8px;width:100%;justify-content:flex-end">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-pur')">Cancel</button>
-        <button class="btn btn-primary btn-sm" id="pdf-import-btn" onclick="importPurchasePDF()" style="display:none">
-          <i class="fas fa-upload"></i> Import All Entries
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Sales Modal — Single Entry + Bulk LOCAL + Bulk SUPPLY -->
-<div class="modal-overlay" id="m-sal">
-  <div class="modal-box" style="max-width:640px;width:96vw">
-    <div class="modal-hd">
-      <div class="modal-title"><i class="fas fa-truck" style="color:var(--green)"></i> Sales Entry</div>
-      <button class="modal-close" onclick="closeModal('m-sal')"><i class="fas fa-times"></i></button>
-    </div>
-
-    <!-- Tabs — 3 tabs -->
-    <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
-      <button id="sal-tab-single" onclick="salTab('single')"
-        style="flex:1;padding:10px 6px;font-size:11px;font-weight:700;border:none;cursor:pointer;
-               border-bottom:2px solid var(--green);color:var(--green);background:transparent;transition:all .2s">
-        <i class="fas fa-pen" style="margin-right:5px"></i>Single Entry
-      </button>
-      <button id="sal-tab-local" onclick="salTab('local')"
-        style="flex:1;padding:10px 6px;font-size:11px;font-weight:600;border:none;cursor:pointer;
-               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
-        <i class="fas fa-store" style="margin-right:5px"></i>Bulk LOCAL
-      </button>
-      <button id="sal-tab-supply" onclick="salTab('supply')"
-        style="flex:1;padding:10px 6px;font-size:11px;font-weight:600;border:none;cursor:pointer;
-               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
-        <i class="fas fa-truck" style="margin-right:5px"></i>Bulk SUPPLY
-      </button>
-    </div>
-
-    <!-- ── SINGLE ENTRY ── -->
-    <div id="sal-panel-single" class="modal-body">
-      <div class="form-row-3">
-        <div class="form-group">
-          <label class="form-label">Date <span class="req">*</span></label>
-          <input class="form-input" type="date" id="sal-date">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Party Type <span class="req">*</span></label>
-          <select class="form-input" id="sal-party">
-            <option value="LOCAL SALE">LOCAL SALE</option>
-            <option value="SUPPLY SALE">SUPPLY SALE</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Qty Sent</label>
-          <input class="form-input" type="number" id="sal-qty" placeholder="850" min="0">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Total Sales Amount (₹) <span class="req">*</span></label>
-        <input class="form-input" type="number" id="sal-amt" placeholder="50400" min="0">
-      </div>
-    </div>
-
-    <!-- ── BULK LOCAL ── -->
-    <div id="sal-panel-local" style="display:none">
-      <!-- Sub-tabs: Manual | PDF -->
-      <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
-        <button id="local-sub-manual" onclick="localSubTab('manual')"
-          style="flex:1;padding:9px;font-size:11px;font-weight:700;border:none;cursor:pointer;
-                 border-bottom:2px solid var(--red);color:var(--red);background:transparent">
-          <i class="fas fa-keyboard" style="margin-right:5px"></i>Manual Entry
-        </button>
-        <button id="local-sub-pdf" onclick="localSubTab('pdf')"
-          style="flex:1;padding:9px;font-size:11px;font-weight:600;border:none;cursor:pointer;
-                 border-bottom:2px solid transparent;color:var(--muted);background:transparent">
-          <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
-        </button>
-      </div>
-
-      <!-- MANUAL SUB-PANEL -->
-      <div id="local-sub-panel-manual">
-        <div style="padding:10px 16px;background:var(--red-l);border-bottom:1px solid var(--border);
-                    font-size:12px;color:var(--red-d);font-weight:600">
-          <i class="fas fa-store" style="margin-right:6px"></i>LOCAL SALE — Month-wise date-by-date entry
-        </div>
-        <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
-          <input class="form-input" type="month" id="local-month" style="width:160px;flex:none"
-            oninput="salBuildRows('local')">
-          <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
-        </div>
-        <div id="local-table-wrap"
-          style="max-height:280px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead>
-              <tr style="background:var(--bg)">
-                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
-                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
-                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
-                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
-                <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
-              </tr>
-            </thead>
-            <tbody id="local-tbody"></tbody>
-          </table>
-          <div id="local-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
-            Upar month select karein
-          </div>
-        </div>
-        <div id="local-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:12px;color:var(--muted)">Total Amount</span>
-            <span id="local-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- PDF SUB-PANEL -->
-      <div id="local-sub-panel-pdf" style="display:none">
-        <!-- Step 1: Dropzone -->
-        <div id="local-pdf-step-1">
-          <div id="local-pdf-dropzone"
-            style="margin:16px;border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
-                   text-align:center;cursor:pointer;transition:all .2s"
-            ondragover="event.preventDefault();this.style.borderColor='var(--red)';this.style.background='var(--red-l)'"
-            ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
-            ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';handleLocalPDFDrop(event)"
-            onclick="document.getElementById('local-pdf-file-input').click()">
-            <i class="fas fa-file-pdf" style="font-size:32px;color:var(--red);margin-bottom:10px;display:block"></i>
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">
-              LOCAL SALE PDF yahan drop karo
-            </div>
-            <div style="font-size:11px;color:var(--muted)">ya click karke select karo</div>
-            <input type="file" id="local-pdf-file-input" accept="application/pdf" style="display:none"
-              onchange="handleLocalPDFFileSelect(this)">
-          </div>
-          <div id="local-pdf-loading" style="display:none;text-align:center;padding:40px 20px">
-            <div class="spin-ring" style="margin:0 auto 12px"></div>
-            <div style="font-size:13px;color:var(--muted)">PDF read ho raha hai…</div>
-            <div id="local-pdf-loading-page" style="font-size:11px;color:var(--sub);margin-top:4px"></div>
-          </div>
-        </div>
-
-        <!-- Step 2: Preview -->
-        <div id="local-pdf-step-2" style="display:none">
-          <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
-                      border-bottom:1px solid var(--border);background:var(--bg)">
-            <div>
-              <span style="font-size:12px;font-weight:700;color:var(--green)">
-                <i class="fas fa-check-circle" style="margin-right:5px"></i>
-                <span id="local-pdf-found-count">0 days</span>
-              </span>
-              <span id="local-pdf-file-name" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
-            </div>
-            <button onclick="localPdfReset()" style="font-size:11px;color:var(--red);background:none;border:none;
-              cursor:pointer;font-weight:600">
-              <i class="fas fa-redo" style="margin-right:3px"></i>Change File
-            </button>
-          </div>
-
-          <div id="local-pdf-preview-table"
-            style="max-height:240px;overflow-y:auto;padding:0 16px"></div>
-
-          <div style="margin:12px 16px;padding:12px 14px;background:var(--green-l);border-radius:10px;
-                      display:flex;justify-content:space-between;align-items:center;gap:12px">
-            <div>
-              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Amount</div>
-              <div id="local-pdf-total-amt" style="font-size:18px;font-weight:800;color:var(--green)">₹0</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Qty</div>
-              <div id="local-pdf-total-qty" style="font-size:15px;font-weight:700;color:var(--text)">0</div>
-            </div>
-          </div>
-
-          <div style="padding:0 16px 12px;font-size:11px;color:var(--muted)">
-            <i class="fas fa-info-circle" style="margin-right:4px"></i>
-            Same date pe agar amount badla to purani value replace ho jayegi. Har change Audit Log mein save hoga.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── BULK SUPPLY ── -->
-      <div id="sal-panel-supply" style="display:none">
-      <!-- Sub-tabs: Manual | PDF -->
-      <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
-        <button id="supply-sub-manual" onclick="supplySubTab('manual')"
-          style="flex:1;padding:9px;font-size:11px;font-weight:700;border:none;cursor:pointer;
-                 border-bottom:2px solid var(--green);color:var(--green);background:transparent">
-          <i class="fas fa-keyboard" style="margin-right:5px"></i>Manual Entry
-        </button>
-        <button id="supply-sub-pdf" onclick="supplySubTab('pdf')"
-          style="flex:1;padding:9px;font-size:11px;font-weight:600;border:none;cursor:pointer;
-                 border-bottom:2px solid transparent;color:var(--muted);background:transparent">
-          <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
-        </button>
-      </div>
-
-      <!-- MANUAL SUB-PANEL -->
-      <div id="supply-sub-panel-manual">
-        <div style="padding:10px 16px;background:var(--green-l);border-bottom:1px solid var(--border);
-                    font-size:12px;color:var(--green);font-weight:600">
-          <i class="fas fa-truck" style="margin-right:6px"></i>SUPPLY SALE — Month-wise date-by-date entry
-        </div>
-        <div style="padding:10px 16px 6px;display:flex;align-items:center;gap:10px">
-          <input class="form-input" type="month" id="supply-month" style="width:160px;flex:none"
-            oninput="salBuildRows('supply')">
-          <span style="font-size:11px;color:var(--muted)">Month select karo → har din ki row aayegi</span>
-        </div>
-        <div id="supply-table-wrap"
-          style="max-height:280px;overflow-y:auto;padding:0 16px 10px;border-bottom:1px solid var(--border)">
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead>
-              <tr style="background:var(--bg)">
-                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">#</th>
-                <th style="padding:7px 6px;text-align:left;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Date</th>
-                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Qty</th>
-                <th style="padding:7px 6px;text-align:right;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Amount (₹)*</th>
-                <th style="padding:7px 6px;text-align:center;font-size:10px;color:var(--muted);position:sticky;top:0;background:var(--bg)">Skip</th>
-              </tr>
-            </thead>
-            <tbody id="supply-tbody"></tbody>
-          </table>
-          <div id="supply-empty" style="text-align:center;padding:20px;color:var(--muted);font-size:12px">
-            Upar month select karein
-          </div>
-        </div>
-        <div id="supply-totals" style="display:none;padding:10px 16px;background:var(--green-l)">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <span style="font-size:12px;color:var(--muted)">Total Amount</span>
-            <span id="supply-total-amt" style="font-size:15px;font-weight:800;color:var(--green)">₹0</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- PDF SUB-PANEL -->
-      <div id="supply-sub-panel-pdf" style="display:none">
-        <!-- Step 1: Dropzone -->
-        <div id="supply-pdf-step-1">
-          <div id="supply-pdf-dropzone"
-            style="margin:16px;border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
-                   text-align:center;cursor:pointer;transition:all .2s"
-            ondragover="event.preventDefault();this.style.borderColor='var(--green)';this.style.background='var(--green-l)'"
-            ondragleave="this.style.borderColor='var(--border)';this.style.background=''"
-            ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='';handleSupplyPDFDrop(event)"
-            onclick="document.getElementById('supply-pdf-file-input').click()">
-            <i class="fas fa-file-pdf" style="font-size:32px;color:var(--green);margin-bottom:10px;display:block"></i>
-            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">
-              SUPPLY / BILL PDF yahan drop karo
-            </div>
-            <div style="font-size:11px;color:var(--muted)">Invoice PDF · Net Amt date-wise sum hoga</div>
-            <input type="file" id="supply-pdf-file-input" accept="application/pdf" style="display:none"
-              onchange="handleSupplyPDFFileSelect(this)">
-          </div>
-          <div id="supply-pdf-loading" style="display:none;text-align:center;padding:40px 20px">
-            <div class="spin-ring" style="margin:0 auto 12px"></div>
-            <div style="font-size:13px;color:var(--muted)">PDF read ho raha hai…</div>
-            <div id="supply-pdf-loading-page" style="font-size:11px;color:var(--sub);margin-top:4px"></div>
-          </div>
-        </div>
-
-        <!-- Step 2: Preview -->
-        <div id="supply-pdf-step-2" style="display:none">
-          <div style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;
-                      border-bottom:1px solid var(--border);background:var(--bg)">
-            <div>
-              <span style="font-size:12px;font-weight:700;color:var(--green)">
-                <i class="fas fa-check-circle" style="margin-right:5px"></i>
-                <span id="supply-pdf-found-count">0 days</span>
-              </span>
-              <span id="supply-pdf-file-name" style="font-size:11px;color:var(--muted);margin-left:8px"></span>
-            </div>
-            <button onclick="supplyPdfReset()" style="font-size:11px;color:var(--green);background:none;border:none;
-              cursor:pointer;font-weight:600">
-              <i class="fas fa-redo" style="margin-right:3px"></i>Change File
-            </button>
-          </div>
-
-          <div id="supply-pdf-preview-table"
-            style="max-height:240px;overflow-y:auto;padding:0 16px"></div>
-
-          <div style="margin:12px 16px;padding:12px 14px;background:var(--green-l);border-radius:10px;
-                      display:flex;justify-content:space-between;align-items:center;gap:12px">
-            <div>
-              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Amount</div>
-              <div id="supply-pdf-total-amt" style="font-size:18px;font-weight:800;color:var(--green)">₹0</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase">Total Qty</div>
-              <div id="supply-pdf-total-qty" style="font-size:15px;font-weight:700;color:var(--text)">—</div>
-            </div>
-          </div>
-
-          <div style="padding:0 16px 12px;font-size:11px;color:var(--muted)">
-            <i class="fas fa-info-circle" style="margin-right:4px"></i>
-            Same date pe agar amount badla to purani value replace ho jayegi. Source = PDF_SUPPLY.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="modal-ft">
-      <div id="sal-ft-single" style="display:flex;gap:8px;width:100%;justify-content:flex-end">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
-        <button class="btn btn-green btn-sm" id="sal-save" onclick="saveSaleEntry()">
-          <i class="fas fa-save"></i> Save Entry
-        </button>
-      </div>
-      <div id="sal-ft-local" style="display:none;gap:8px;width:100%;justify-content:flex-end">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
-        <!-- Manual save -->
-        <button class="btn btn-green btn-sm" id="local-save-btn" onclick="saveBulkSale('local')">
-          <i class="fas fa-upload"></i> Save LOCAL Entries
-        </button>
-        <!-- PDF import (hidden by default) -->
-        <button class="btn btn-red btn-sm" id="local-pdf-import-btn" onclick="importLocalSalePDF()" style="display:none">
-          <i class="fas fa-upload"></i> Import All Entries
-        </button>
-      </div>
-      <div id="sal-ft-supply" style="display:none;gap:8px;width:100%;justify-content:flex-end">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-sal')">Cancel</button>
-        <button class="btn btn-green btn-sm" id="supply-save-btn" onclick="saveBulkSale('supply')">
-          <i class="fas fa-upload"></i> Save SUPPLY Entries
-        </button>
-        <button class="btn btn-green btn-sm" id="supply-pdf-import-btn" onclick="importSupplySalePDF()" style="display:none">
-          <i class="fas fa-upload"></i> Import All Entries
-        </button>
-      </div>
+      </section>
     </div>
   </div>
 </div>
 
-<!-- Expenses Modal — Manual + PDF Import -->
-<div class="modal-overlay" id="m-exp">
-  <div class="modal-box" style="max-width:560px;width:96vw">
-    <div class="modal-hd">
-      <div class="modal-title"><i class="fas fa-file-invoice-dollar" style="color:var(--amber)"></i> Expense Entry</div>
-      <button class="modal-close" onclick="closeModal('m-exp')"><i class="fas fa-times"></i></button>
-    </div>
-
-    <!-- Tabs -->
-    <div style="display:flex;border-bottom:1px solid var(--border);background:var(--bg)">
-      <button id="exp-tab-manual" onclick="expTab('manual')"
-        style="flex:1;padding:10px 6px;font-size:12px;font-weight:700;border:none;cursor:pointer;
-               border-bottom:2px solid var(--amber);color:var(--amber);background:transparent;transition:all .2s">
-        <i class="fas fa-pen" style="margin-right:5px"></i>Manual Entry
-      </button>
-      <button id="exp-tab-pdf" onclick="expTab('pdf')"
-        style="flex:1;padding:10px 6px;font-size:12px;font-weight:600;border:none;cursor:pointer;
-               border-bottom:2px solid transparent;color:var(--muted);background:transparent;transition:all .2s">
-        <i class="fas fa-file-pdf" style="margin-right:5px"></i>Import from PDF
-      </button>
-    </div>
-
-    <!-- ── MANUAL TAB ── -->
-    <div id="exp-panel-manual" class="modal-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Month <span class="req">*</span></label>
-          <select class="form-input" id="exp-month"></select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Total Expenses (₹) <span class="req">*</span></label>
-          <input class="form-input" type="number" id="exp-amt" placeholder="e.g. 845000" min="0">
-        </div>
-      </div>
-    </div>
-
-    <!-- ── PDF TAB ── -->
-    <div id="exp-panel-pdf" class="modal-body" style="display:none">
-      <div id="exp-pdf-step-1">
-        <div id="exp-pdf-dropzone"
-          onclick="document.getElementById('exp-pdf-file-input').click()"
-          ondragover="event.preventDefault();this.style.borderColor='var(--amber)';this.style.background='var(--amber-l)'"
-          ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg)'"
-          ondrop="event.preventDefault();this.style.borderColor='var(--border)';this.style.background='var(--bg)';handleExpensePDFDrop(event)"
-          style="border:2px dashed var(--border);border-radius:12px;padding:32px 20px;
-                 text-align:center;cursor:pointer;background:var(--bg);transition:all .2s;margin-bottom:14px">
-          <i class="fas fa-file-pdf" style="font-size:36px;color:var(--amber);margin-bottom:10px;display:block"></i>
-          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px">
-            Expense Voucher PDF Yahan Drop Karein
-          </div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">ya click karke select karein</div>
-          <div style="display:inline-flex;align-items:center;gap:6px;background:var(--amber);color:#fff;
-                      padding:8px 18px;border-radius:8px;font-size:12px;font-weight:700">
-            <i class="fas fa-folder-open"></i> Browse File
-          </div>
-          <input type="file" id="exp-pdf-file-input" accept=".pdf" style="display:none"
-            onchange="handleExpensePDFFileSelect(this)">
-        </div>
-        <div class="info-box blue">
-          <i class="fas fa-info-circle"></i>
-          <span>Accounting software se export hua <strong>Expense Voucher List PDF</strong> upload karein. App <strong>DATE TOTAL</strong> se daily debit extract karke month-wise total banayega.</span>
-        </div>
-        <div id="exp-pdf-loading" style="display:none;text-align:center;padding:20px">
-          <i class="fas fa-spinner fa-spin" style="font-size:24px;color:var(--amber);margin-bottom:8px;display:block"></i>
-          <div style="font-size:13px;font-weight:600;color:var(--text)" id="exp-pdf-loading-text">PDF read ho raha hai…</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:4px" id="exp-pdf-loading-page">Page 0 / 0</div>
-        </div>
-      </div>
-
-      <div id="exp-pdf-step-2" style="display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <span style="font-size:13px;font-weight:700;color:var(--text)">
-            <i class="fas fa-check-circle" style="color:var(--green);margin-right:6px"></i>
-            <span id="exp-pdf-found-count">0</span>
-          </span>
-          <div style="display:flex;align-items:center;gap:10px">
-            <span id="exp-pdf-file-name" style="font-size:11px;color:var(--muted)"></span>
-            <button onclick="expPdfReset()"
-              style="font-size:11px;color:var(--muted);border:none;background:none;cursor:pointer;text-decoration:underline">
-              ↩ Change File
-            </button>
-          </div>
-        </div>
-        <div id="exp-pdf-preview-table"
-          style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--amber-l);
-                    border:1px solid #FDE293;border-radius:8px;margin-bottom:12px">
-          <i class="fas fa-rupee-sign" style="color:var(--amber-d);font-size:20px"></i>
-          <div style="flex:1">
-            <div style="font-size:11px;color:var(--muted)">Total Expenses (Debit)</div>
-            <div id="exp-pdf-total-amt" style="font-size:17px;font-weight:800;color:var(--amber-d)">₹0</div>
-          </div>
-        </div>
-        <div class="info-box amber">
-          <i class="fas fa-exclamation-triangle"></i>
-          <span>Preview check karein. Import ke baad month-wise entries sheet mein save ho jaayengi.</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="modal-ft">
-      <div id="exp-ft-manual" style="display:flex;gap:8px;width:100%;justify-content:flex-end">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-exp')">Cancel</button>
-        <button class="btn btn-amber btn-sm" id="exp-save" onclick="saveExpenseEntry()">
-          <i class="fas fa-save"></i> Save Entry
-        </button>
-      </div>
-      <div id="exp-ft-pdf" style="display:none;gap:8px;width:100%;justify-content:flex-end">
-        <button class="btn btn-secondary btn-sm" onclick="closeModal('m-exp')">Cancel</button>
-        <button class="btn btn-amber btn-sm" id="exp-pdf-import-btn" onclick="importExpensePDF()" style="display:none">
-          <i class="fas fa-upload"></i> Import All
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Sign Out Modal -->
-<div class="modal-overlay" id="m-signout">
-  <div class="modal-box modal-sm">
-    <div class="modal-hd">
-      <div class="modal-title"><i class="fas fa-sign-out-alt"></i> Sign Out</div>
-      <button class="modal-close" onclick="closeModal('m-signout')"><i class="fas fa-times"></i></button>
-    </div>
-    <div class="modal-body" style="text-align:center;padding:32px 24px">
-      <div style="width:60px;height:60px;border-radius:50%;background:var(--red-l);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:24px;color:var(--red)">
-        <i class="fas fa-sign-out-alt"></i>
-      </div>
-      <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:8px">Sign Out?</div>
-      <div style="font-size:13px;color:var(--muted)">Aap Fresko P&amp;L Tracker se logout karna chahte hain?</div>
-    </div>
-    <div class="modal-ft" style="justify-content:center;gap:12px">
-      <button class="btn btn-secondary btn-sm" onclick="closeModal('m-signout')" style="min-width:100px">Cancel</button>
-      <button class="btn btn-primary btn-sm"
-              onclick="try{localStorage.removeItem('fresko_session')}catch(e){}location.reload()"
-              style="min-width:100px">
-        <i class="fas fa-sign-out-alt"></i> Sign Out
-      </button>
-    </div>
-  </div>
-</div>
-
-<script src="app.js"></script>
+<script src="./app.js"></script>
+<script>
+function goTo(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.sb-nav-item').forEach(n => n.classList.remove('active'));
+  const target = document.getElementById('v-' + view);
+  if (target) target.classList.add('active');
+  const navItem = document.querySelector('[onclick*="goTo(\'' + view + '\')"]');
+  if (navItem) navItem.classList.add('active');
+  const titles = {
+    dashboard: 'Dashboard',
+    summary: 'Annual Summary',
+    purchase: 'Purchase Entry',
+    sales: 'Sales Entry',
+    expenses: 'Expenses Entry',
+    monthly: 'Monthly P&L',
+    analysis: 'Party Analysis',
+    insights: 'Insights'
+  };
+  const pt = document.getElementById('pageTitle');
+  if (pt) pt.textContent = titles[view] || view;
+}
+function openPurchaseModal() { if (typeof openPurModal === 'function') openPurModal(); else Swal.fire('Purchase', 'Use app.js modal'); }
+function openSalesModal() { if (typeof openSaleModal === 'function') openSaleModal(); else Swal.fire('Sales', 'Use app.js modal'); }
+function openExpenseModal() { if (typeof openExpModal === 'function') openExpModal(); else Swal.fire('Expense', 'Use app.js modal'); }
+function logout() { if (typeof doLogout === 'function') doLogout(); else location.reload(); }
+// Mobile sidebar
+document.getElementById('mobileMenu')?.addEventListener('click', () => {
+  document.getElementById('sb').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+});
+document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
+  document.getElementById('sb').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+});
+</script>
 </body>
 </html>
+
+<style>
+
+/* ===== FULL THEME EXPANSION (KBN-matched depth) ===== */
+.sidebar-toggle{width:100%;border:0;background:rgba(255,255,255,.06);color:#94a3b8;border-radius:8px;padding:8px;margin-top:8px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.sidebar-toggle:hover{background:rgba(255,255,255,.1);color:#e2e8f0}
+.app.collapsed .sidebar .logo-text-wrap,.app.collapsed .sidebar .brand small,.app.collapsed .sidebar .nav-label{display:none!important}
+.app.collapsed .sb-nav-item{justify-content:center!important;padding:12px 0!important}
+.metric-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px}
+.metric-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex-shrink:0}
+.metric.blue .metric-icon{background:#dbeafe;color:#2563eb}
+.metric.green .metric-icon{background:#d1fae5;color:#059669}
+.metric.orange .metric-icon{background:#fef3c7;color:#d97706}
+.metric.red .metric-icon{background:#fee2e2;color:#dc2626}
+.panels{display:grid;grid-template-columns:1.3fr .9fr;gap:12px;margin-bottom:12px}
+.lower{display:grid;grid-template-columns:1.3fr .9fr;gap:12px}
+.statusbody{display:flex;align-items:center;gap:24px;min-height:170px}
+.donut{width:140px;height:140px;border-radius:50%;background:conic-gradient(#e2e8f0 0 100%);display:grid;place-items:center;position:relative}
+.donut::before{content:'';position:absolute;inset:24px;border-radius:50%;background:#fff}
+.donut strong{position:relative;z-index:1;font-size:17px;font-weight:700}
+.statuslegend{display:grid;gap:10px;flex:1}
+.statusrow{display:flex;align-items:center;gap:8px;font-size:12px;color:#475569}
+.statusrow i{width:9px;height:9px;border-radius:50%}
+.quickstats .qs-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:13px}
+.toast{position:fixed;right:16px;bottom:16px;z-index:40;background:var(--navy);color:#fff;border-radius:10px;padding:12px 16px;font-size:13px;display:none}
+.toast.show{display:block}
+/* Modal full structure styles */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(2px);z-index:60;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.show{display:flex}
+.modal-box{width:min(520px,100%);background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(15,23,42,.18);overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+.modal-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.modal-head h3{margin:0;font-size:15px;font-weight:650}
+.modal-body{padding:16px;overflow:auto;flex:1}
+.modal-foot{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+/* Table action column */
+td.actions{white-space:nowrap;min-width:140px}
+td.actions .btn{margin-right:4px}
+/* Additional empty & utility */
+.empty-icon{width:40px;height:40px;margin:0 auto 10px;border-radius:50%;background:#f1f5f9;display:grid;place-items:center}
+/* Form enhancements */
+.field textarea{min-height:80px;resize:vertical}
+.type-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.type-pill{border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;color:#475569;cursor:pointer}
+.type-pill.active{background:var(--blue);border-color:var(--blue);color:#fff}
+/* More responsive rules */
+@media(max-width:900px){:root{--sidebar-w:220px}}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);width:min(280px,86vw)}
+  .sidebar.open{transform:translateX(0);box-shadow:8px 0 30px rgba(15,23,42,.28)}
+  .app.collapsed .sidebar{width:min(280px,86vw)}
+  .topbar{padding:0 12px;height:52px}
+  .profile .meta{display:none}
+  .content{padding:14px 12px 28px}
+  .welcome{flex-direction:column}
+  .cards{grid-template-columns:1fr 1fr;gap:10px}
+  .panels,.lower{grid-template-columns:1fr}
+}
+@media(max-width:420px){.cards{grid-template-columns:1fr}}
+
+</style>
