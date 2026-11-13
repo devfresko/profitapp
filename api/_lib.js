@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const store = require('./_store');
 
 const GAS_URL = process.env.GAS_URL;
 const GAS_SECRET = process.env.GAS_SECRET || process.env.API_SECRET;
@@ -21,15 +22,15 @@ async function callGas(action, data, token) {
     });
     return await r.json();
   } catch (e) {
-    return { success: false, error: 'GAS timeout or network error' };
+    return { success: false, error: 'GAS timeout' };
   } finally {
     clearTimeout(t);
   }
 }
 
 async function handle(action, data, token) {
-  // Direct proxy to GAS (profitapp is simpler than taskapp)
+  // Reads can come from snapshot later; for now direct GAS
   return callGas(action, data, token);
 }
 
-module.exports = { handle, callGas };
+module.exports = { handle, callGas, store };
