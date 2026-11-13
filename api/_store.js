@@ -11,34 +11,31 @@ function db() {
   return _db;
 }
 
-const META_COL = 'profit_meta';   // ← alag naam
+const COL = 'profit_meta';
 
 function metaRef(doc = 'snapshot') {
-  return db().collection(META_COL).doc(doc);
+  return db().collection(COL).doc(doc);
 }
 
-async function saveSnapshot(snap, expectedVersion) {
+async function saveSnapshot(data) {
   const ref = metaRef('snapshot');
   const payload = {
     builtAt: Date.now(),
-    lastUpdate: String(snap.lastUpdate || Date.now()),
+    lastUpdate: String(data.lastUpdate || Date.now()),
     version: String(Date.now()),
-    bytes: JSON.stringify(snap).length,
-    chunks: 1,
-    data: snap
+    purchase: data.purchase || [],
+    sales: data.sales || [],
+    expenses: data.expenses || [],
+    summary: data.summary || [],
+    stats: data.stats || {}
   };
   await ref.set(payload);
   return payload;
 }
 
 async function loadSnapshot() {
-  const snap = await metaRef('snapshot').get();
-  return snap.exists ? snap.data() : null;
+  const s = await metaRef('snapshot').get();
+  return s.exists ? s.data() : null;
 }
 
-async function getMeta() {
-  const s = await metaRef('sync').get();
-  return s.exists ? s.data() : {};
-}
-
-module.exports = { db, metaRef, saveSnapshot, loadSnapshot, getMeta, META_COL };
+module.exports = { db, metaRef, saveSnapshot, loadSnapshot, COL };
