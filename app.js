@@ -48,11 +48,11 @@ function _api(action, data, ok, err) {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + (_TOKEN || '')
     },
-    body: JSON.stringify({ action: action, data: data || {} })
+    body: JSON.stringify({ action, data: data || {} })
   })
-  .then(function(r) { return r.json(); })
-  .then(function(res) { if (ok) ok(res); })
-  .catch(function(e) { if (err) err(e); });
+  .then(r => r.json())
+  .then(ok)
+  .catch(err || (() => {}));
 }
 
 /* ═══════════════════════════════════════════════════════════
