@@ -1,16 +1,17 @@
-const { callGas } = require('./_lib');
+const { callGas, store } = require('./_lib');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const given = String((req.query && req.query.secret) || req.headers['x-sync-secret'] || '');
   const want = String(process.env.SYNC_SECRET || '');
-  if (!want || given !== want) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
-  }
+  if (!want || given !== want) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
   try {
     const snap = await callGas('getAllData', {}, '');
-    res.status(200).json({ success: true, data: snap });
+    if (snap && snap.success) {
+      await store.saveSnapshot(snap);
+    }
+    res.status(200).json({ success: true, saved: !!(snap && snap.success) });
   } catch (e) {
     res.status(200).json({ success: false, error: e.message });
   }
