@@ -36,52 +36,23 @@ let _lastChange = '0';
    Architecture: GitHub Pages → JSONP → GAS doGet
 ───────────────────────────────────────────────────────── */
 
-// ⚠️  GAS deployment URL yahan daalo (Deploy → New → Web App → Anyone)
-var API = 'https://script.google.com/macros/s/AKfycbyULTKbu2gBwaIcSConsDT8SGwA6j5h-HKFsrjI8cT60DWnKeEUqi_i_y3W7NiSmFmE/exec';
 
 var _cbIdx = 0;
 
+var API = 'https://fresko-profitapp.vercel.app/api/rpc';
+
 function _api(action, data, ok, err) {
-  const cbName = '_gcb' + (++_cbIdx);
-  let timeout;
-
-  window[cbName] = function(r) {
-    clearTimeout(timeout);
-    try { delete window[cbName]; } catch(e) {}
-    const sc = document.getElementById('_s_' + cbName);
-    if (sc) sc.remove();
-    // Auto sign-out if not authenticated
-    if (r && r.success === false && r.error === 'NOT_AUTHENTICATED') {
-      toast('Session expired. Please login again.', 'warning');
-      setTimeout(() => location.reload(), 1500);
-      return;
-    }
-    if (ok) ok(r);
-  };
-
-  timeout = setTimeout(function() {
-    try { delete window[cbName]; } catch(e) {}
-    const sc = document.getElementById('_s_' + cbName);
-    if (sc) sc.remove();
-    if (err) err({ message: 'Request timed out. Network check karein.' });
-  }, 25000);
-
-  const payload = encodeURIComponent(JSON.stringify({
-    action: action,
-    data:   data   || {},
-    token:  _TOKEN || ''
-  }));
-
-  const s    = document.createElement('script');
-  s.id       = '_s_' + cbName;
-  s.src      = API + '?callback=' + cbName + '&payload=' + payload;
-  s.onerror  = function() {
-    clearTimeout(timeout);
-    try { delete window[cbName]; } catch(e) {}
-    this.remove();
-    if (err) err({ message: 'Network error. GAS URL check karein.' });
-  };
-  document.head.appendChild(s);
+  fetch(API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (_TOKEN || '')
+    },
+    body: JSON.stringify({ action: action, data: data || {} })
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) { if (ok) ok(res); })
+  .catch(function(e) { if (err) err(e); });
 }
 
 /* ═══════════════════════════════════════════════════════════
