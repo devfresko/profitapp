@@ -15,3 +15,10 @@ module.exports = async (req, res) => {
     res.status(200).json({ success: false, error: e.message });
   }
 };
+
+
+await store.metaRef('sync').set({
+  lastSyncAt: Date.now(),
+  dirty: false,
+  syncing: false
+}, { merge: true });
