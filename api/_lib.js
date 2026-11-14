@@ -28,6 +28,7 @@ async function callGas(action, data, token) {
 }
 
 async function handle(action, data, token) {
+  // Reads
   if (READS.has(action)) {
     try {
       const meta = await store.getMeta();
@@ -38,16 +39,19 @@ async function handle(action, data, token) {
     } catch (e) {}
   }
 
+  // Writes
   const result = await callGas(action, data, token);
 
-  // Write ke baad snapshot refresh (reliable)
+  // Important: success ke baad turant snapshot refresh
   if (result && result.success && !READS.has(action)) {
     try {
       const fresh = await callGas('getSnapshot', {}, '');
       if (fresh && fresh.success) {
         await store.saveSnapshot(fresh);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('snapshot refresh failed', e.message);
+    }
   }
 
   return result;
