@@ -10,7 +10,7 @@ module.exports = async (req, res) => {
       await store.saveSnapshot(snap);
       return res.status(200).json({ success: true, saved: true });
     }
-    res.status(200).json({ success: false, error: 'getSnapshot failed' });
+    res.status(200).json({ success: false, error: (snap && snap.error) || 'getSnapshot failed' });
   } catch (e) {
     res.status(200).json({ success: false, error: e.message });
   }
