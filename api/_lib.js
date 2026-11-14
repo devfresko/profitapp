@@ -33,12 +33,24 @@ async function handle(action, data, token) {
       const meta = await store.getMeta();
       if (meta) {
         const snap = await store.loadSnapshot(meta);
-        const out = fromSnapshot(snap, action);
-        if (out) return out;
+        if (snap) return { success: true, ...snap };
       }
     } catch (e) {}
   }
-  return callGas(action, data, token);
+
+  const result = await callGas(action, data, token);
+
+  // Write ke baad snapshot refresh (reliable)
+  if (result && result.success && !READS.has(action)) {
+    try {
+      const fresh = await callGas('getSnapshot', {}, '');
+      if (fresh && fresh.success) {
+        await store.saveSnapshot(fresh);
+      }
+    } catch (e) {}
+  }
+
+  return result;
 }
 
 module.exports = { handle, callGas, store };
