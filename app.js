@@ -2027,7 +2027,7 @@ function pdfReset() {
 // importPurchasePDF / bulkSave — jo pehle se hai wohi rehne do
 // (agar nahi hai to yeh bhi add karo)
 
-// function importPurchasePDF() {
+// 
 //   var src = (typeof _pdfParsed !== 'undefined' && _pdfParsed && _pdfParsed.length)
 //     ? _pdfParsed
 //     : (window._pdfParsed || []);
@@ -2109,7 +2109,7 @@ function importPurchasePDF() {
   var btn = document.getElementById('pdf-import-btn');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
   }
 
   var allEntries = src.map(function(r) {
@@ -2120,7 +2120,6 @@ function importPurchasePDF() {
     };
   }).filter(function(r) { return r.date && r.amount > 0; });
 
-  // Ek hi call — inspiration from PurchaseUploader
   _api('bulkSavePurchaseFast', { entries: allEntries, source: 'PDF' },
     function(r) {
       _busy = false;
@@ -2129,17 +2128,17 @@ function importPurchasePDF() {
         btn.innerHTML = '<i class="fas fa-upload"></i> Import All Entries';
       }
       if (r && r.success) {
-        try { closeModal('m-pur'); } catch (e) {}
-        try { pdfReset(); } catch (e) {}
+        try { closeModal('m-pur'); } catch(e) {}
+        try { pdfReset(); } catch(e) {}
         _pdfParsed = [];
         window._pdfParsed = [];
-        toast('✅ ' + (r.total || allEntries.length) + ' entries import ho gaye!', 'success');
+        toast('✅ ' + (r.total || allEntries.length) + ' entries save ho gaye!', 'success');
         _loadData(false);
       } else {
-        toast('❌ ' + ((r && r.error) || 'Import failed'), 'error');
+        toast('❌ ' + ((r && r.error) || 'Save failed'), 'error');
       }
     },
-    function(err) {
+    function() {
       _busy = false;
       if (btn) {
         btn.disabled = false;
