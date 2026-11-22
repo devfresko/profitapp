@@ -1179,24 +1179,41 @@ function _drawPartyDash() {
 }
 
 function _drawChart(id, type, labels, datasets, legend, yFmt, dualAxis) {
+  if (!labels || !labels.length || !datasets || !datasets.length) return;
   if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
-  const ctx = document.getElementById(id); if (!ctx) return;
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+
   const scales = {
-    y:  { beginAtZero:true, grid:{color:'rgba(0,0,0,.05)'}, ticks:{font:{size:11,family:'Inter'}, callback: v => yFmt===false?v.toLocaleString('en-IN'):'₹'+fmt(v)} },
-    x:  { grid:{display:false}, ticks:{font:{size:11,family:'Inter'}} }
+    y: {
+      beginAtZero: true,
+      grid: { color: 'rgba(0,0,0,.05)' },
+      ticks: { font: { size: 11, family: 'Inter' }, callback: v => yFmt === false ? v.toLocaleString('en-IN') : '₹' + fmt(v) }
+    },
+    x: { grid: { display: false }, ticks: { font: { size: 11, family: 'Inter' } } }
   };
   if (dualAxis) {
-    scales.y1 = { type:'linear', position:'right', beginAtZero:true, grid:{display:false}, ticks:{font:{size:11,family:'Inter'}, callback:v=>'₹'+fmt(v)} };
+    scales.y1 = { type: 'linear', position: 'right', beginAtZero: true, grid: { display: false }, ticks: { font: { size: 11, family: 'Inter' }, callback: v => '₹' + fmt(v) } };
   }
-  _charts[id] = new Chart(ctx, {
-    data: { labels, datasets },
-    options: {
-      responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
-      plugins: { legend:{ display:!!legend, position:'top', labels:{font:{size:11,family:'Inter'},boxWidth:12,padding:12} },
-        tooltip:{ callbacks:{ label: ctx => ctx.dataset.label+': ₹'+fmt(ctx.parsed.y) } } },
-      scales
-    }
-  });
+
+  try {
+    _charts[id] = new Chart(ctx, {
+      type: type || 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: !!legend, position: 'top', labels: { font: { size: 11, family: 'Inter' }, boxWidth: 12, padding: 12 } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ₹' + fmt(ctx.parsed.y) } }
+        },
+        scales
+      }
+    });
+  } catch (e) {
+    console.error('Chart error on', id, e);
+  }
 }
 
 function _drawDoughnut(id, labels, data, colors) {
