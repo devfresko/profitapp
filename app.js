@@ -276,16 +276,21 @@ function _loadData(firstLoad, cb) {
         return;
       }
 
+      // Force mapping
       DB = data;
-      // Force correct keys
       DB.purchases = data.purchase || data.purchases || [];
       DB.sales     = data.sales || [];
       DB.expenses  = data.expenses || [];
       DB.summary   = data.summary || [];
 
-      // Always rebuild
-      DB.chart    = _buildChartFromRaw(DB.purchases, DB.sales);
-      DB.partyMap = _buildPartyMap(DB.sales);
+      // Rebuild charts only if we have data
+      if (DB.purchases.length || DB.sales.length) {
+        DB.chart    = _buildChartFromRaw(DB.purchases, DB.sales);
+        DB.partyMap = _buildPartyMap(DB.sales);
+      } else {
+        DB.chart = { labels: [], purchase: [], sale: [] };
+        DB.partyMap = {};
+      }
 
       _lastChange = data.lastUpdate || '0';
       const ls = document.getElementById('last-sync-lbl');
@@ -295,6 +300,7 @@ function _loadData(firstLoad, cb) {
       const ldr = document.getElementById('loader');
       if (ldr) ldr.style.display = 'none';
 
+      console.log('Loaded purchases:', DB.purchases.length, 'sales:', DB.sales.length);
       if (cb) cb();
       else _rerender();
     },
@@ -1166,10 +1172,10 @@ function _drawTrend() {
 }
 
 function _drawPartyDash() {
-  const pm   = DB.partyMap || {};
+  const pm = DB.partyMap || {};
   const keys = Object.keys(pm);
   if (!keys.length) return;
-  _drawDoughnut('ch-party-dash', keys, keys.map(k=>pm[k].total), ['#C0392B','#27AE60','#E67E22','#2980B9','#8E44AD']);
+  _drawDoughnut('ch-party-dash', keys, keys.map(k => pm[k].total), ['#C0392B','#27AE60','#E67E22','#2980B9','#8E44AD']);
 }
 
 function _drawChart(id, type, labels, datasets, legend, yFmt, dualAxis) {
