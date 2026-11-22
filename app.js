@@ -39,7 +39,7 @@ let _lastChange = '0';
 
 var _cbIdx = 0;
 
-var API = 'https://fresko-profitapp.vercel.app/api/rpc';
+var API = 'https://pnl.fresko.co.in/api/rpc';
 
 function _api(action, data, ok, err) {
   fetch(API, {
