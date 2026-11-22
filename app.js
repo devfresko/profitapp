@@ -276,27 +276,25 @@ function _loadData(firstLoad, cb) {
         return;
       }
 
-      // Force normalize keys
-      DB = {
-        success: true,
-        stats: data.stats || {},
-        purchases: data.purchase || data.purchases || [],
-        sales: data.sales || [],
-        expenses: data.expenses || [],
-        summary: data.summary || [],
-        lastUpdate: data.lastUpdate || '0'
-      };
+      DB = data;
+      // Force correct keys
+      DB.purchases = data.purchase || data.purchases || [];
+      DB.sales     = data.sales || [];
+      DB.expenses  = data.expenses || [];
+      DB.summary   = data.summary || [];
 
-      // Always rebuild chart + partyMap from raw data
-      DB.chart = _buildChartFromRaw(DB.purchases, DB.sales);
+      // Always rebuild
+      DB.chart    = _buildChartFromRaw(DB.purchases, DB.sales);
       DB.partyMap = _buildPartyMap(DB.sales);
 
-      _lastChange = DB.lastUpdate;
+      _lastChange = data.lastUpdate || '0';
       const ls = document.getElementById('last-sync-lbl');
       if (ls) ls.textContent = 'Synced ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
 
       DB._loaded = true;
-      const ldr = document.getElementById('loader'); if (ldr) ldr.style.display = 'none';
+      const ldr = document.getElementById('loader');
+      if (ldr) ldr.style.display = 'none';
+
       if (cb) cb();
       else _rerender();
     },
