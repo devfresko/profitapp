@@ -275,13 +275,25 @@ function _loadData(firstLoad, cb) {
         _showLoadError(data ? data.error : 'Unknown error');
         return;
       }
+      // Normalize
       DB = data;
+      DB.purchases = data.purchase || data.purchases || [];
+      DB.sales     = data.sales || [];
+      DB.expenses  = data.expenses || [];
+      DB.summary   = data.summary || [];
+
+      // Build chart + partyMap if missing
+      if (!DB.chart || !DB.chart.labels || !DB.chart.labels.length) {
+        DB.chart = _buildChartFromRaw(DB.purchases, DB.sales);
+      }
+      if (!DB.partyMap || !Object.keys(DB.partyMap).length) {
+        DB.partyMap = _buildPartyMap(DB.sales);
+      }
+
       _lastChange = data.lastUpdate || '0';
       const ls = document.getElementById('last-sync-lbl');
       if (ls) ls.textContent = 'Synced ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
-      if (firstLoad) {
-        UI.pollerTimer = setInterval(_silentPoll, 30000);
-      }
+
       DB._loaded = true;
       const ldr = document.getElementById('loader'); if(ldr) ldr.style.display = 'none';
       if (cb) cb();
@@ -3325,4 +3337,57 @@ function importSupplySalePDF() {
   }
 
   sendNext();
+}
+
+function _buildChartFromRaw(purchases, sales) {
+  const months = {};
+  (purchases || []).forEach(p => {
+    const m = _monthKey(p.date);
+    if (!m) return;
+    months[m] = months[m] || { purchase: 0, sale: 0 };
+    months[m].purchase += Number(p.amount) || 0;
+  });
+  (sales || []).forEach(s => {
+    const m = _monthKey(s.date);
+    if (!m) return;
+    months[m] = months[m] || { purchase: 0, sale: 0 };
+    months[m].sale += Number(s.amount) || 0;
+  });
+  const labels = Object.keys(months).sort();
+  return {
+    labels,
+    purchase: labels.map(m => months[m].purchase),
+    sale: labels.map(m => months[m].sale)
+  };
+}
+
+function _buildPartyMap(sales) {
+  const map = {};
+  (sales || []).forEach(s => {
+    const party = String(s.party || s.type || 'OTHER').toUpperCase().trim() || 'OTHER';
+    if (!map[party]) map[party] = { total: 0, count: 0 };
+    map[party].total += Number(s.amount) || 0;
+    map[party].count++;
+  });
+  return map;
+}
+
+function _monthKey(dateStr) {
+  if (!dateStr) return '';
+  const s = String(dateStr).trim();
+  // DD/MM/YYYY or YYYY-MM-DD
+  let m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (m) return m[3] + '-' + m[2].padStart(2,'0');
+  m = s.match(/(\d{4})-(\d{2})/);
+  if (m) return m[1] + '-' + m[2];
+  return '';
+}
+
+function clearCache() {
+  if (!confirm('Cache clear karke fresh data load karna hai?')) return;
+  toast('Cache clear ho raha hai...', 'info');
+  // Force reload from GAS
+  _api('getAllData', { force: true }, () => {
+    location.reload();
+  }, () => location.reload());
 }
