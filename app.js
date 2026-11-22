@@ -275,27 +275,28 @@ function _loadData(firstLoad, cb) {
         _showLoadError(data ? data.error : 'Unknown error');
         return;
       }
-      // Normalize
-      DB = data;
-      DB.purchases = data.purchase || data.purchases || [];
-      DB.sales     = data.sales || [];
-      DB.expenses  = data.expenses || [];
-      DB.summary   = data.summary || [];
 
-      // Build chart + partyMap if missing
-      if (!DB.chart || !DB.chart.labels || !DB.chart.labels.length) {
-        DB.chart = _buildChartFromRaw(DB.purchases, DB.sales);
-      }
-      if (!DB.partyMap || !Object.keys(DB.partyMap).length) {
-        DB.partyMap = _buildPartyMap(DB.sales);
-      }
+      // Force normalize keys
+      DB = {
+        success: true,
+        stats: data.stats || {},
+        purchases: data.purchase || data.purchases || [],
+        sales: data.sales || [],
+        expenses: data.expenses || [],
+        summary: data.summary || [],
+        lastUpdate: data.lastUpdate || '0'
+      };
 
-      _lastChange = data.lastUpdate || '0';
+      // Always rebuild chart + partyMap from raw data
+      DB.chart = _buildChartFromRaw(DB.purchases, DB.sales);
+      DB.partyMap = _buildPartyMap(DB.sales);
+
+      _lastChange = DB.lastUpdate;
       const ls = document.getElementById('last-sync-lbl');
       if (ls) ls.textContent = 'Synced ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
 
       DB._loaded = true;
-      const ldr = document.getElementById('loader'); if(ldr) ldr.style.display = 'none';
+      const ldr = document.getElementById('loader'); if (ldr) ldr.style.display = 'none';
       if (cb) cb();
       else _rerender();
     },
@@ -3341,18 +3342,16 @@ function importSupplySalePDF() {
 
 function _buildChartFromRaw(purchases, sales) {
   const months = {};
-  (purchases || []).forEach(p => {
-    const m = _monthKey(p.date);
-    if (!m) return;
-    months[m] = months[m] || { purchase: 0, sale: 0 };
-    months[m].purchase += Number(p.amount) || 0;
-  });
-  (sales || []).forEach(s => {
-    const m = _monthKey(s.date);
-    if (!m) return;
-    months[m] = months[m] || { purchase: 0, sale: 0 };
-    months[m].sale += Number(s.amount) || 0;
-  });
+  function add(arr, key) {
+    (arr || []).forEach(item => {
+      const m = _monthKey(item.date);
+      if (!m) return;
+      if (!months[m]) months[m] = { purchase: 0, sale: 0 };
+      months[m][key] += Number(item.amount) || 0;
+    });
+  }
+  add(purchases, 'purchase');
+  add(sales, 'sale');
   const labels = Object.keys(months).sort();
   return {
     labels,
@@ -3364,7 +3363,8 @@ function _buildChartFromRaw(purchases, sales) {
 function _buildPartyMap(sales) {
   const map = {};
   (sales || []).forEach(s => {
-    const party = String(s.party || s.type || 'OTHER').toUpperCase().trim() || 'OTHER';
+    let party = String(s.party || s.type || 'OTHER').toUpperCase().trim();
+    if (!party) party = 'OTHER';
     if (!map[party]) map[party] = { total: 0, count: 0 };
     map[party].total += Number(s.amount) || 0;
     map[party].count++;
@@ -3375,13 +3375,13 @@ function _buildPartyMap(sales) {
 function _monthKey(dateStr) {
   if (!dateStr) return '';
   const s = String(dateStr).trim();
-  // DD/MM/YYYY or YYYY-MM-DD
   let m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-  if (m) return m[3] + '-' + m[2].padStart(2,'0');
+  if (m) return m[3] + '-' + m[2].padStart(2, '0');
   m = s.match(/(\d{4})-(\d{2})/);
   if (m) return m[1] + '-' + m[2];
   return '';
 }
+
 
 function clearCache() {
   if (!confirm('Cache clear karke fresh data load karna hai?')) return;
