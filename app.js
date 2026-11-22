@@ -732,47 +732,60 @@ function _inDateRange(dateStr, from, to) {
 
 function renderPurchase(pg) {
   if (pg !== undefined) _page.purchase = pg;
-  const arr  = DB.purchases || [];
-  const v    = document.getElementById('v-purchase');
+  const arr = DB.purchases || [];
+  const v = document.getElementById('v-purchase');
   if (!v) return;
 
-  const q        = document.getElementById('pur-q') ? document.getElementById('pur-q').value.trim() : '';
-  const filtered = q ? arr.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase())) : arr;
-  const page     = _page.purchase;
-  const total    = filtered.length;
-  const rows     = filtered.slice((page-1)*PER, page*PER);
-  const s        = DB.stats || {};
+  const q = document.getElementById('pur-q')?.value.trim() || '';
+  const from = document.getElementById('pur-from')?.value || '';
+  const to = document.getElementById('pur-to')?.value || '';
+  const month = document.getElementById('pur-month')?.value || 'all';
+
+  let filtered = arr.filter(r => {
+    if (q && !JSON.stringify(r).toLowerCase().includes(q.toLowerCase())) return false;
+    if (!_inDateRange(r.date, from, to)) return false;
+    if (month !== 'all' && _monthKey(r.date) !== month) return false;
+    return true;
+  });
+
+  const page = _page.purchase;
+  const total = filtered.length;
+  const rows = filtered.slice((page - 1) * PER, page * PER);
+
+  const months = [...new Set(arr.map(r => _monthKey(r.date)).filter(Boolean))].sort().reverse();
 
   const tblRows = rows.map((r, i) => `<tr>
     <td style="color:var(--sub);font-size:11px;width:40px">${(page-1)*PER+i+1}</td>
     <td style="font-weight:600">${fmtD(r.date)}</td>
     <td>${fmt0(r.qty)}</td>
     <td class="num">₹${fmt(r.amount)}</td>
-    <td style="color:var(--muted);font-size:12px">${r.by||'—'}</td>
-    <td style="color:var(--sub);font-size:11px">${r.ts||'—'}</td>
+    <td style="color:var(--muted);font-size:12px">${r.by || '—'}</td>
+    <td style="color:var(--sub);font-size:11px">${r.ts || '—'}</td>
   </tr>`).join('');
 
-  v.innerHTML = _pageHd('Purchase Entry', 'Daily purchase record karein',
+  v.innerHTML = _pageHd('Purchase Entry', 'Daily purchase records',
     `${_btnSecondary('Export CSV','exportCSV(\'purchase\')','fa-download')}
-     ${_btnPrimary('New Entry','openModal(\'m-pur\')','fa-plus')}`
-  ) +
-
-  `<div class="g3" style="margin-bottom:20px">
-    ${_statCard('Total Entries', arr.length, '', 'sc-slate', 'fa-hashtag')}
-    ${_statCard('Total Purchase', INR(s.totalPurchase||0), '', 'sc-red', 'fa-shopping-cart')}
-    ${_statCard('Avg. per Entry', arr.length?INR(Math.round((s.totalPurchase||0)/arr.length)):'—', '', 'sc-blue', 'fa-calculator')}
+     <button class="btn btn-primary btn-sm" onclick="openModal('m-pur')"><i class="fas fa-plus" style="margin-right:6px"></i>New Entry</button>`
+  ) + `
+  <div class="g3" style="margin-bottom:20px">
+    ${_statCard('Total Purchase', INR(DB.stats.totalPurchase || 0), total + ' filtered', 'sc-red', 'fa-shopping-cart')}
   </div>
-
   <div class="card">
     <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
       <span style="font-size:14px;font-weight:700"><i class="fas fa-list" style="color:var(--red);margin-right:8px"></i>Purchase History</span>
     </div>
     <div class="card-p">
-      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-        <div class="search-wrap" style="flex:1;min-width:200px">
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+        <input type="date" id="pur-from" class="form-input" style="width:140px" value="${from}" onchange="renderPurchase(1)" title="From date">
+        <input type="date" id="pur-to" class="form-input" style="width:140px" value="${to}" onchange="renderPurchase(1)" title="To date">
+        <select id="pur-month" class="form-input" style="width:150px" onchange="renderPurchase(1)">
+          <option value="all">All Months</option>
+          ${months.map(m => `<option value="${m}" ${month===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+        <div class="search-wrap" style="flex:1;min-width:180px">
           <i class="fas fa-search"></i>
           <input class="form-input" id="pur-q" placeholder="Search date, amount, qty…" value="${q}"
-                 oninput="_page.purchase=1;renderPurchase()" style="padding-left:32px">
+                 oninput="renderPurchase(1)" style="padding-left:32px">
         </div>
         <span class="badge b-slate" style="align-self:center">${total} records</span>
       </div>
@@ -785,66 +798,77 @@ function renderPurchase(pg) {
   </div>`;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   SALES VIEW
-═══════════════════════════════════════════════════════════ */
 function renderSales(pg) {
   if (pg !== undefined) _page.sales = pg;
   const arr = DB.sales || [];
-  const v   = document.getElementById('v-sales');
+  const v = document.getElementById('v-sales');
   if (!v) return;
 
-  const q    = document.getElementById('sal-q') ? document.getElementById('sal-q').value.trim() : '';
-  const filt = document.getElementById('sal-f') ? document.getElementById('sal-f').value : 'all';
-  let filtered = q ? arr.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase())) : arr;
-  if (filt !== 'all') filtered = filtered.filter(r => (r.party||'').toLowerCase().includes(filt.toLowerCase()));
+  const q = document.getElementById('sal-q')?.value.trim() || '';
+  const filt = document.getElementById('sal-f')?.value || 'all';
+  const from = document.getElementById('sal-from')?.value || '';
+  const to = document.getElementById('sal-to')?.value || '';
+  const month = document.getElementById('sal-month')?.value || 'all';
 
-  const page     = _page.sales;
-  const total    = filtered.length;
-  const rows     = filtered.slice((page-1)*PER, page*PER);
-  const locTotal = arr.filter(r=>(r.party||'').includes('LOCAL')).reduce((s,r)=>s+(r.amount||0),0);
-  const supTotal = arr.filter(r=>!(r.party||'').includes('LOCAL')).reduce((s,r)=>s+(r.amount||0),0);
-  const s        = DB.stats || {};
+  let filtered = arr.filter(r => {
+    if (q && !JSON.stringify(r).toLowerCase().includes(q.toLowerCase())) return false;
+    if (filt !== 'all' && !(r.party || '').toLowerCase().includes(filt.toLowerCase())) return false;
+    if (!_inDateRange(r.date, from, to)) return false;
+    if (month !== 'all' && _monthKey(r.date) !== month) return false;
+    return true;
+  });
+
+  const page = _page.sales;
+  const total = filtered.length;
+  const rows = filtered.slice((page - 1) * PER, page * PER);
+
+  const months = [...new Set(arr.map(r => _monthKey(r.date)).filter(Boolean))].sort().reverse();
+  const locTotal = arr.filter(r => (r.party || '').includes('LOCAL')).reduce((s, r) => s + (r.amount || 0), 0);
+  const supTotal = arr.filter(r => !(r.party || '').includes('LOCAL')).reduce((s, r) => s + (r.amount || 0), 0);
 
   const tblRows = rows.map((r, i) => {
-    const cls = String(r.party||'').includes('LOCAL') ? 'b-red' : 'b-green';
+    const cls = String(r.party || '').includes('LOCAL') ? 'b-red' : 'b-green';
     return `<tr>
       <td style="color:var(--sub);font-size:11px;width:40px">${(page-1)*PER+i+1}</td>
       <td style="font-weight:600">${fmtD(r.date)}</td>
-      <td><span class="badge ${cls}">${r.party||'—'}</span></td>
+      <td><span class="badge ${cls}">${r.party || '—'}</span></td>
       <td>${fmt0(r.qty)}</td>
       <td class="num">₹${fmt(r.amount)}</td>
-      <td style="color:var(--muted);font-size:12px">${r.by||'—'}</td>
+      <td style="color:var(--muted);font-size:12px">${r.by || '—'}</td>
     </tr>`;
   }).join('');
 
-  v.innerHTML = _pageHd('Sales Entry', 'Party-wise daily sales record karein',
+  v.innerHTML = _pageHd('Sales Entry', 'Party-wise daily sales record',
     `${_btnSecondary('Export CSV','exportCSV(\'sales\')','fa-download')}
      <button class="btn btn-green btn-sm" onclick="openModal('m-sal')"><i class="fas fa-plus" style="margin-right:6px"></i>New Entry</button>`
-  ) +
-
-  `<div class="g3" style="margin-bottom:20px">
+  ) + `
+  <div class="g3" style="margin-bottom:20px">
     ${_statCard('LOCAL SALE', INR(locTotal), '', 'sc-red', 'fa-store')}
     ${_statCard('SUPPLY SALE', INR(supTotal), '', 'sc-green', 'fa-truck')}
-    ${_statCard('Total Sale', INR(s.totalSale||0), '', 'sc-blue', 'fa-chart-line')}
+    ${_statCard('Total Sale', INR(DB.stats.totalSale || 0), total + ' filtered', 'sc-blue', 'fa-chart-line')}
   </div>
-
   <div class="card">
     <div class="card-p" style="border-bottom:1px solid var(--border);padding:14px 20px">
       <span style="font-size:14px;font-weight:700"><i class="fas fa-list" style="color:var(--green);margin-right:8px"></i>Sales History</span>
     </div>
     <div class="card-p">
-      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-        <div class="search-wrap" style="flex:1;min-width:180px">
-          <i class="fas fa-search"></i>
-          <input class="form-input" id="sal-q" placeholder="Search sales…" value="${q}"
-                 oninput="_page.sales=1;renderSales()" style="padding-left:32px">
-        </div>
-        <select class="form-input" id="sal-f" style="width:150px;flex:none" onchange="_page.sales=1;renderSales()">
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+        <input type="date" id="sal-from" class="form-input" style="width:140px" value="${from}" onchange="renderSales(1)">
+        <input type="date" id="sal-to" class="form-input" style="width:140px" value="${to}" onchange="renderSales(1)">
+        <select id="sal-month" class="form-input" style="width:150px" onchange="renderSales(1)">
+          <option value="all">All Months</option>
+          ${months.map(m => `<option value="${m}" ${month===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+        <select class="form-input" id="sal-f" style="width:140px" onchange="renderSales(1)">
           <option value="all" ${filt==='all'?'selected':''}>All Parties</option>
           <option value="LOCAL" ${filt==='LOCAL'?'selected':''}>LOCAL SALE</option>
           <option value="SUPPLY" ${filt==='SUPPLY'?'selected':''}>SUPPLY SALE</option>
         </select>
+        <div class="search-wrap" style="flex:1;min-width:160px">
+          <i class="fas fa-search"></i>
+          <input class="form-input" id="sal-q" placeholder="Search sales…" value="${q}"
+                 oninput="renderSales(1)" style="padding-left:32px">
+        </div>
         <span class="badge b-slate" style="align-self:center">${total} records</span>
       </div>
       ${_tbl(
